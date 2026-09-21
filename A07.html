@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>탄약 개수 실시간 파악 테스트</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; background: #f4f6f9; margin: 0; padding: 15px; }
+        .container { max-width: 540px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        h2 { margin-top: 5px; color: #1a1a1a; font-size: 20px; }
+        video { display: none; } /* 카메라 원본은 연산을 위해 숨김 */
+        .video-wrapper { position: relative; width: 100%; border-radius: 10px; overflow: hidden; background: #000; }
+        canvas { width: 100%; height: auto; display: block; }
+        .result-box { margin-top: 15px; padding: 12px; background: #ffebee; border-radius: 8px; font-size: 26px; font-weight: bold; color: #c62828; }
+        .status { color: #555; font-size: 13px; margin-bottom: 12px; padding: 8px; background: #eaeaea; border-radius: 6px; word-break: break-all; min-height: 18px;}
+    </style>
+    <!-- 같은 폴더 안의 opencv.js 파일을 즉시 수동 로딩으로 제어합니다 -->
+    <script src="opencv.js" id="opencv-script" type="text/javascript"></script>
+</head>
+<body>
+
+<div class="container">
+    <h2>실탄 개수 실시간 카운터</h2>
+    <div id="status" class="status">OpenCV 자바스크립트 엔진을 준비 중입니다...</div>
+    
+    <div class="video-wrapper">
+        <!-- 모바일 가속과 무음 인라인 재생 필수 속성 적용 -->
+        <video id="video" autoplay playsinline muted></video>
+        <!-- 실시간 에지 검출 결과 캔버스 -->
+        <canvas id="canvasOutput"></canvas>
+    </div>
+    
+    <div class="result-box">
+        검출된 실탄: <span id="count">0</span>발
+    </div>
+</div>
+
+<script>
+let video = document.getElementById('video');
+let canvasOutput = document.getElementById('canvasOutput');
+let ctx = canvasOutput.getContext('2d', { willReadFrequently: true });
+let isOpenCvReady = false;
+
+function updateStatus(msg) {
+    document.getElementById('status').innerText = msg;
+}
+
+// 1. 순차적 파일 검증 루프 구현 (로딩 차단 방지)
+function verifyOpenCvInitialization() {
+    if (typeof cv !== 'undefined' && cv.Mat) {
+        updateStatus("OpenCV 엔진 활성화 완료! 후면 카메라를 연결합니다.");
+        isOpenCvReady = true;
+        activateMobileCamera();
+    } else {
+        // 준비가 안 되었을 경우 0.4초 간격으로 유연하게 확인 재시도
+        setTimeout(verifyOpenCvInitialization, 400);
+    }
+}
+
+// 파일 경로 누락 예외 처리
+document.getElementById('opencv-script').onerror = function() {
+    updateStatus("❌ 에러: 폴더 내에서 'opencv.js' 파일을 찾지 못했습니다. 파일 위치나 파일명을 확인하세요.");
+};
+
+// 웹페이지 렌더링이 끝나면 체크 루프 시작
+window.onload = function() {
+    verifyOpenCvInitialization();
+};
+
+// 2. 모바일 카메라 정밀 제어 (iOS 및 Android 표준 호환)
+function activateMobileCamera() {
+    const constraints = {
+        video: { 
+            facingMode: { ideal: "environment" }, // 후면 카메라 지향
+            width: { ideal: 640 },                // 연산량 최적화를 위해 모바일 타겟 해상도 지정
+            height: { ideal: 480 }
+        },
+        audio: false
+    };
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        updateStatus("❌ 에러: 해당 브라우저 혹은 프로토콜(http) 환경에서는 카메라 구동이 제한됩니다. HTTPS 연결을 권장합니다.");
+        return;
+    }
+
+    updateStatus("카메라 작동을 위한 장치 제어 요청 중...");
+
+    navigator.mediaDevices.getUserMedia(constraints)
+        .then(function(stream) {
+            video.srcObject = stream;
+            video.play();
+            updateStatus("✅ 연동 성공 - 황금색 실탄 후면(원형)을 정면으로 비춰주세요.");
+            
+            video.addEventListener('canplay', () => {
+                canvasOutput.width = video.videoWidth;
+                canvasOutput.height = video.videoHeight;
+                setTimeout(startImageProcessing, 30);
+            });
+        })
+        .catch(function(err) {
+            updateStatus("❌ 카메라 켜기 실패: " + err.name + " (" + err.message + ")\n상단의 자물쇠 아이콘을 눌러 권한을 허용해 주셔야 합니다.");
+        });
+}
+
+// 3. OpenCV 하이퍼파라미터 튜닝을 거친 원형 매칭 알고리즘
+function startImageProcessing() {
+    if (!isOpenCvReady || video.paused || video.ended) {
+        return;
+    }
+
+    try {
+        // 카메라 프레임 해상도에 맞춰 행렬 버퍼 할당
+        let src = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
+        ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+        let imgData = ctx.getImageData(0, 0, video.videoWidth, video.videoHeight);
+        src.data.set(imgData.data);
+
+        let gray = new cv.Mat();
+        let circles = new cv.Mat();
+
+        // [컴퓨터 비전 전처리 프로세스]
+        // RGBA 이미지를 고속 흑백(Grayscale) 상태로 전환
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        
+        // 사격장 특유의 거친 노이즈와 미세 요철을 분쇄하기 위해 커널 필터 마스크 적용
+        cv.GaussianBlur(gray, gray, new cv.Size(7, 7), 1.5, 1.5);
+
+        // 허프 변환 원형 검출 연산 (2.2LR 탄약 플라스틱 가이드 케이스 트레이 격자에 최적화 세팅)
+        cv.HoughCircles(
+            gray, 
+            circles, 
+            cv.HOUGH_GRADIENT, 
+            1, 
+            22,    // minDist: 인접 실탄 중심 간의 최소 거리 제한 (단위: 픽셀)
+            45,    // param1: 선 두께 민감도 (Canny edge)
+            16,    // param2: 축적기 임계값 (낮을수록 더 부드럽고 수많은 원형을 탐지함)
+            10,    // minRadius: 감지 대상 실탄 후면의 최소 반지름 규격
+            28     // maxRadius: 감지 대상 실탄 후면의 최대 반지름 규격
+        );
+
+        let bulletCount = 0;
+        
+        // 탐지된 원형 요소를 실제 캔버스 화면 상에 드로잉
+        if (circles.cols > 0) {
+            bulletCount = circles.cols;
+            for (let i = 0; i < circles.cols; ++i) {
+                let x = circles.data32F[i * 3];
+                let y = circles.data32F[i * 3 + 1];
+                let radius = circles.data32F[i * 3 + 2];
+                
+                let center = new cv.Point(x, y);
+                // 실탄 외각 라인 마킹 (밝은 형광 연두색 테두리)
+                cv.circle(src, center, radius, [0, 255, 0, 255], 2);
+                // 중심 좌표 스팟 마킹 (적색 타겟 포인트 점)
+                cv.circle(src, center, 2, [255, 0, 0, 255], -1);
+            }
+        }
+
+        // 결과 인터페이스 텍스트 갱신
+        document.getElementById('count').innerText = bulletCount;
+        cv.imshow('canvasOutput', src);
+
+        // 자바스크립트 가비지 컬렉터의 메모리 누수 방지를 위한 매 프레임 수동 메모리 소거
+        src.delete();
+        gray.delete();
+        circles.delete();
+
+    } catch (err) {
+        console.error("OpenCV 처리 도중 에러가 발생했습니다:", err);
+    }
+
+    // 다음 디스플레이 수직 동기화 신호에 맞춰 분석 루프 무한 반복 예약
+    requestAnimationFrame(startImageProcessing);
+}
+</script>
+
+</body>
+</html>

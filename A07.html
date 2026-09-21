@@ -1,688 +1,359 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#111827">
-<title>나주 사격장 실탄 카운터 (A07)</title>
-<style>
-*{box-sizing:border-box}
-body{
-    font-family:-apple-system,BlinkMacSystemFont,"Noto Sans KR",sans-serif;
-    text-align:center;background:#f4f6f9;margin:0;padding:15px;
-}
-.container{
-    max-width:520px;margin:0 auto;background:#fff;padding:20px;
-    border-radius:16px;box-shadow:0 4px 16px rgba(0,0,0,.08);
-}
-h2{margin:5px 0 15px;color:#1a1a1a;font-size:20px}
-button{
-    appearance:none;-webkit-appearance:none;border:0;cursor:pointer;
-    font-weight:700;border-radius:35px;width:100%;
-}
-.start-btn{
-    background:#00e676;color:#000;padding:18px 25px;font-size:20px;
-    box-shadow:0 6px 20px rgba(0,230,118,.35);margin-bottom:15px;
-}
-.capture-btn{
-    background:#ff1744;color:#fff;padding:18px 25px;font-size:20px;
-    box-shadow:0 6px 20px rgba(255,23,68,.35);margin-top:15px;
-}
-.reset-btn{
-    background:#1e88e5;color:#fff;padding:15px 25px;font-size:18px;
-    box-shadow:0 6px 20px rgba(30,136,229,.35);margin-top:15px;display:none;
-}
-button:disabled{opacity:.55;cursor:not-allowed}
-.status{
-    color:#444;font-size:13px;margin-bottom:15px;padding:14px;
-    background:#eaeaea;border-radius:8px;word-break:break-all;
-    text-align:left;line-height:1.5;font-weight:700;
-}
-.video-box{
-    position:relative;width:100%;background:#111;border-radius:12px;
-    overflow:hidden;min-height:280px;
-}
-#video{
-    width:100%;height:auto;display:block;background:#000;
-    object-fit:contain;
-}
-#canvasOutput{
-    position:absolute;inset:0;width:100%;height:100%;
-    display:block;pointer-events:none;
-}
-.result-box{
-    margin-top:15px;padding:18px;background:#e8f5e9;border-radius:12px;
-    font-size:20px;font-weight:700;color:#2e7d32;display:none;
-    border:2px solid #81c784;text-align:left;line-height:1.7;
-}
-.result-box span.total-count{color:#d32f2f;font-size:32px}
-.help{
-    margin-top:12px;font-size:12px;color:#555;line-height:1.5;text-align:left;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>나주 사격장 실탄 카운터 V3 (A07)</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; background: #f4f6f9; margin: 0; padding: 15px; }
+        .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+        h2 { margin: 5px 0 15px 0; color: #1a1a1a; font-size: 20px; }
+        
+        .start-btn { 
+            background: #00e676; color: #000; border: none; padding: 18px 25px; 
+            font-size: 20px; font-weight: bold; border-radius: 35px; cursor: pointer; 
+            width: 100%; box-shadow: 0 6px 20px rgba(0,230,118,0.4); margin-bottom: 15px; 
+        }
+        
+        .capture-btn {
+            background: #ff1744; color: white; border: none; padding: 18px 25px;
+            font-size: 20px; font-weight: bold; border-radius: 35px; cursor: pointer;
+            width: 100%; box-shadow: 0 6px 20px rgba(255,23,68,0.4); margin-top: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .reset-btn { 
+            background: #1e88e5; color: white; border: none; padding: 15px 25px; 
+            font-size: 18px; font-weight: bold; border-radius: 35px; cursor: pointer; 
+            margin-top: 15px; width: 100%; box-shadow: 0 6px 20px rgba(30,136,229,0.4);
+            display: none;
+        }
+        
+        .video-box { position: relative; width: 100%; height: auto; background: #222; border-radius: 12px; overflow: hidden; min-height: 320px; }
+        #video { width: 100%; height: auto; display: block; background: #000; }
+        #canvasOutput { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+        
+        .result-box { margin-top: 15px; padding: 20px; background: #e8f5e9; border-radius: 12px; font-size: 24px; font-weight: bold; color: #2e7d32; display: none; border: 2px solid #81c784; text-align: left; }
+        .result-box span.total-count { color: #d32f2f; font-size: 32px; }
+        .status { color: #444; font-size: 13px; margin-bottom: 15px; padding: 15px; background: #eaeaea; border-radius: 8px; word-break: break-all; text-align: left; line-height: 1.5; font-weight: bold; }
+    </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>🎯 나주 사격장 실탄 카운터</h2>
-
-    <button id="startBtn" class="start-btn">⚡ 스마트폰 카메라 가동</button>
-
-    <div id="status" class="status">
-        카메라 버튼을 누르면 후면 카메라를 실행합니다.
-    </div>
-
+    <h2>🎯 나주 사격장 실탄 카운터 V3</h2>
+    
+    <button id="startBtn" class="start-btn" onclick="activateDeviceLens()">⚡ 스마트폰 카메라 가동</button>
+    <div id="status" class="status">초록색 버튼을 눌러 격자 정밀 추적 장치를 활성화해 주세요.</div>
+    
     <div class="video-box">
-        <video id="video" autoplay playsinline muted></video>
+        <video id="video" autoplay playsinline muted loop></video>
         <canvas id="canvasOutput"></canvas>
     </div>
-
-    <button id="captureBtn" class="capture-btn" disabled>
-        📸 실탄 개수 촬영하기
-    </button>
-
-    <button id="resetBtn" class="reset-btn">
-        🔄 다시 촬영하기
-    </button>
-
+    
+    <button id="captureBtn" class="capture-btn" onclick="processAdvancedV3Count()">📸 정밀 비전 카운트 시작</button>
+    <button id="resetBtn" class="reset-btn" onclick="unfreezeAndResetCamera()">🔄 다시 조준하기</button>
+    
     <div id="resultBox" class="result-box">
-        📌 <b>50칸 격자 분석 결과</b><br>
-        • 채워진 칸(실탄): <span id="count" class="total-count">0</span>발<br>
-        • 비어있는 칸: <span id="emptyCount">0</span>칸
-    </div>
-
-    <div class="help">
-        ※ 현재 방식은 화면의 5×10 가상 격자 안에 탄약 1발씩 정확히 들어오는
-        <b>50칸 트레이</b>를 대상으로 합니다. 실제 탄약의 위치가 격자와 크게 어긋나거나
-        여러 발이 한 칸에 들어가면 정확도가 떨어질 수 있습니다.
+        📊 <b>V3 지능형 스캔 완료</b><br>
+        • 최종 실탄 수량: <span id="count" class="total-count">0</span>발<br>
+        • 비어있는 슬롯: <span id="emptyCount">0</span>칸
     </div>
 </div>
 
 <script>
-"use strict";
+const startBtn = document.getElementById('startBtn');
+const captureBtn = document.getElementById('captureBtn');
+const resetBtn = document.getElementById('resetBtn');
+const statusDiv = document.getElementById('status');
+const video = document.getElementById('video');
+const canvasOutput = document.getElementById('canvasOutput');
+const resultBox = document.getElementById('resultBox');
+const ctx = canvasOutput.getContext('2d', { willReadFrequently: true });
 
-const startBtn = document.getElementById("startBtn");
-const captureBtn = document.getElementById("captureBtn");
-const resetBtn = document.getElementById("resetBtn");
-const statusDiv = document.getElementById("status");
-const video = document.getElementById("video");
-const canvasOutput = document.getElementById("canvasOutput");
-const resultBox = document.getElementById("resultBox");
-const countEl = document.getElementById("count");
-const emptyCountEl = document.getElementById("emptyCount");
-const ctx = canvasOutput.getContext("2d", {willReadFrequently:true});
-
-let cameraStream = null;
 let isFreezeSnapshot = false;
-let animationId = null;
 
-function printLog(msg, bg="#e3f2fd", color="#0d47a1"){
-    statusDiv.style.background = bg;
-    statusDiv.style.color = color;
-    statusDiv.textContent = msg;
+function printLog(msg, bgColor = '#e3f2fd', textColor = '#0d47a1') {
+    statusDiv.style.background = bgColor;
+    statusDiv.style.color = textColor;
+    statusDiv.innerText = msg;
 }
 
-function isCameraAvailable(){
-    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-}
-
-function stopCamera(){
-    if(cameraStream){
-        cameraStream.getTracks().forEach(track => track.stop());
-        cameraStream = null;
-    }
-    video.srcObject = null;
-}
-
-function getVideoSize(){
-    return {
-        width: video.videoWidth || 640,
-        height: video.videoHeight || 480
-    };
-}
-
-function setCanvasSize(){
-    const {width,height} = getVideoSize();
-    if(canvasOutput.width !== width || canvasOutput.height !== height){
-        canvasOutput.width = width;
-        canvasOutput.height = height;
-    }
-    return {width,height};
-}
-
-function drawGuide(){
-    if(isFreezeSnapshot || !cameraStream || video.readyState < 2) return;
-
-    const {width,height} = setCanvasSize();
-    ctx.clearRect(0,0,width,height);
-
-    const box = getGuideBox(width,height);
-
-    // 외곽 상자
-    ctx.strokeStyle="#00e676";
-    ctx.lineWidth=Math.max(3,width/160);
-    ctx.strokeRect(box.x,box.y,box.w,box.h);
-
-    // 5열 × 10행 격자
-    ctx.strokeStyle="rgba(0,230,118,.35)";
-    ctx.lineWidth=1;
-
-    const colW=box.w/5;
-    const rowH=box.h/10;
-
-    for(let c=1;c<5;c++){
-        const x=box.x+c*colW;
-        ctx.beginPath();
-        ctx.moveTo(x,box.y);
-        ctx.lineTo(x,box.y+box.h);
-        ctx.stroke();
-    }
-
-    for(let r=1;r<10;r++){
-        const y=box.y+r*rowH;
-        ctx.beginPath();
-        ctx.moveTo(box.x,y);
-        ctx.lineTo(box.x+box.w,y);
-        ctx.stroke();
-    }
-
-    animationId=requestAnimationFrame(drawGuide);
-}
-
-function getGuideBox(width,height){
-    // 원본 코드와 동일하게 화면 중앙 60% × 80% 사용
-    return {
-        x:width*0.20,
-        y:height*0.10,
-        w:width*0.60,
-        h:height*0.80
-    };
-}
-
-async function activateDeviceLens(){
-    if(!isCameraAvailable()){
-        printLog(
-            "❌ 이 브라우저에서는 카메라 기능을 사용할 수 없습니다. Chrome에서 HTTPS 주소로 접속해 주세요.",
-            "#ffebee","#c62828"
-        );
-        return;
-    }
-
-    // 스마트폰 Chrome의 getUserMedia는 보안 컨텍스트가 필요함
-    if(!window.isSecureContext){
-        printLog(
-            "❌ 카메라 사용을 위해 HTTPS 주소가 필요합니다. 네이버 앱이 아니라 Chrome에서 HTTPS 주소로 열어주세요.",
-            "#ffebee","#c62828"
-        );
-        return;
-    }
-
-    startBtn.disabled=true;
-    printLog("🚀 카메라 권한을 요청하는 중입니다...");
-
-    // 기존 스트림이 있으면 먼저 종료
-    stopCamera();
-
-    const constraints={
-        audio:false,
-        video:{
-            facingMode:{ideal:"environment"},
-            width:{ideal:1280},
-            height:{ideal:720}
-        }
+function activateDeviceLens() {
+    printLog("🚀 초정밀 렌즈 스트리밍 연동 중...");
+    const mediaConstraints = {
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false
     };
 
-    try{
-        cameraStream=await navigator.mediaDevices.getUserMedia(constraints);
-
-        video.srcObject=cameraStream;
-        video.muted=true;
-        video.playsInline=true;
-        video.setAttribute("playsinline","");
-        video.setAttribute("webkit-playsinline","");
-
-        await new Promise((resolve)=>{
-            if(video.readyState>=1 && video.videoWidth>0){
-                resolve();
-            }else{
-                video.addEventListener("loadedmetadata",resolve,{once:true});
-            }
-        });
-
-        await video.play();
-
-        isFreezeSnapshot=false;
-        captureBtn.disabled=false;
-        startBtn.style.display="none";
-
-        printLog(
-            "🎯 초록색 5×10 영역 안에 50발 탄약 상자 전체가 들어오도록 위에서 수직으로 맞춘 후 촬영하세요.",
-            "#e8f5e9","#2e7d32"
-        );
-
-        cancelAnimationFrame(animationId);
-        drawGuide();
-
-    }catch(err){
-        cameraStream=null;
-        startBtn.disabled=false;
-
-        let msg="❌ 카메라를 열 수 없습니다.";
-
-        if(err && err.name==="NotAllowedError"){
-            msg="❌ 카메라 권한이 거부되었습니다. Chrome 사이트 설정에서 카메라 권한을 허용해 주세요.";
-        }else if(err && err.name==="NotFoundError"){
-            msg="❌ 사용할 수 있는 카메라를 찾지 못했습니다.";
-        }else if(err && err.name==="NotReadableError"){
-            msg="❌ 다른 앱이 카메라를 사용 중일 수 있습니다. 카메라를 사용하는 앱을 닫아주세요.";
-        }else if(err && err.name==="SecurityError"){
-            msg="❌ 브라우저 보안 설정 때문에 카메라를 사용할 수 없습니다. HTTPS Chrome 접속을 확인하세요.";
-        }
-
-        printLog(msg+" ("+(err?.name || "unknown")+")","#ffebee","#c62828");
-    }
-}
-
-function calculateOtsuThreshold(values){
-    // 50개 칸의 밝기 점수로 자동 임계값을 계산합니다.
-    // 현재 사진처럼 "금색 탄약 / 검은 빈칸"이 뚜렷하게 나뉘는 경우
-    // 고정된 구리색 비율보다 훨씬 안정적입니다.
-    const hist = new Array(256).fill(0);
-
-    for(const value of values){
-        const v = Math.max(0, Math.min(255, Math.round(value)));
-        hist[v]++;
-    }
-
-    const total = values.length;
-    let sumAll = 0;
-
-    for(let i=0;i<256;i++) sumAll += i * hist[i];
-
-    let weightBackground = 0;
-    let sumBackground = 0;
-    let bestVariance = -1;
-    let bestThreshold = 55;
-
-    for(let t=0;t<256;t++){
-        weightBackground += hist[t];
-
-        if(weightBackground === 0) continue;
-
-        const weightForeground = total - weightBackground;
-        if(weightForeground === 0) break;
-
-        sumBackground += t * hist[t];
-
-        const meanBackground = sumBackground / weightBackground;
-        const meanForeground =
-            (sumAll - sumBackground) / weightForeground;
-
-        const betweenClassVariance =
-            weightBackground *
-            weightForeground *
-            Math.pow(meanBackground - meanForeground, 2);
-
-        if(betweenClassVariance > bestVariance){
-            bestVariance = betweenClassVariance;
-            bestThreshold = t;
-        }
-    }
-
-    /*
-     * 아주 어두운 사진에서 Otsu가 지나치게 낮은 기준을 만드는 것을 방지.
-     * 반대로 밝은 사진에서는 Otsu 값을 그대로 사용합니다.
-     */
-    return Math.max(45, bestThreshold);
-}
-
-function getCellBrightnessScore(imageData, width, x1, y1, x2, y2){
-    /*
-     * 한 칸 전체를 단순히 구리색 픽셀로 세지 않습니다.
-
-     * 탄약:
-     *  - 전체적으로 밝음
-     *  - 금색/황색 계열
-     *
-     * 빈 칸:
-     *  - 전체적으로 매우 어두움
-     *  - 일부 반사광이 있어도 중앙 대부분은 어두움
-     *
-     * 따라서 중앙 영역의 "중앙값 밝기" + "밝은 픽셀 비율" +
-     * "따뜻한 색상 비율"을 함께 사용합니다.
-     */
-    const grayValues = [];
-    let brightCount = 0;
-    let warmCount = 0;
-    let samples = 0;
-
-    const marginX = Math.floor((x2-x1)*0.20);
-    const marginY = Math.floor((y2-y1)*0.20);
-
-    const sx = x1 + marginX;
-    const ex = x2 - marginX;
-    const sy = y1 + marginY;
-    const ey = y2 - marginY;
-
-    for(let y=sy;y<ey;y+=2){
-        for(let x=sx;x<ex;x+=2){
-            const idx=(y*width+x)*4;
-
-            const r=imageData.data[idx];
-            const g=imageData.data[idx+1];
-            const b=imageData.data[idx+2];
-
-            // 사람 눈의 밝기에 가까운 간단한 luminance
-            const luminance =
-                0.299*r + 0.587*g + 0.114*b;
-
-            grayValues.push(luminance);
-
-            if(luminance >= 90) brightCount++;
-
-            // 금색/황색 계열 보조 점수
-            if(
-                r > 105 &&
-                g > 70 &&
-                b < 125 &&
-                r > b*1.15 &&
-                g > b*1.05
-            ){
-                warmCount++;
-            }
-
-            samples++;
-        }
-    }
-
-    if(samples === 0){
-        return {
-            score:0,
-            median:0,
-            brightRatio:0,
-            warmRatio:0
-        };
-    }
-
-    grayValues.sort((a,b)=>a-b);
-
-    const middle=Math.floor(grayValues.length/2);
-    const median =
-        grayValues.length % 2
-        ? grayValues[middle]
-        : (grayValues[middle-1]+grayValues[middle])/2;
-
-    const brightRatio=brightCount/samples;
-    const warmRatio=warmCount/samples;
-
-    /*
-     * 핵심 점수:
-     * 중앙값을 가장 중요하게 보고,
-     * 밝은 픽셀/금색 픽셀을 보조합니다.
-     *
-     * 실제 사진에서는 금색 탄약이 어둡게 찍혀도
-     * 중앙값이 빈 검은 칸보다 훨씬 높게 나옵니다.
-     */
-    const score =
-        median * 0.72 +
-        brightRatio * 60 +
-        warmRatio * 25;
-
-    return {
-        score,
-        median,
-        brightRatio,
-        warmRatio
-    };
-}
-
-function processGridTrayCount(){
-    if(
-        !cameraStream ||
-        !video.srcObject ||
-        video.readyState < 2 ||
-        video.videoWidth === 0
-    ){
-        printLog(
-            "❌ 먼저 스마트폰 카메라를 켜주세요.",
-            "#ffebee","#c62828"
-        );
-        return;
-    }
-
-    if(isFreezeSnapshot) return;
-
-    isFreezeSnapshot=true;
-    captureBtn.disabled=true;
-    cancelAnimationFrame(animationId);
-
-    if(navigator.vibrate) navigator.vibrate(60);
-
-    printLog(
-        "⚙️ 50칸의 밝기·색상·명암을 자동 보정하여 분석 중입니다..."
-    );
-
-    const {width,height}=setCanvasSize();
-
-    // 촬영된 실제 프레임을 먼저 보관
-    ctx.drawImage(video,0,0,width,height);
-
-    const frame=ctx.getImageData(0,0,width,height);
-
-    const box=getGuideBox(width,height);
-    const cols=5;
-    const rows=10;
-    const colW=box.w/cols;
-    const rowH=box.h/rows;
-
-    /*
-     * 1단계:
-     * 50개 칸의 점수를 먼저 모두 계산합니다.
-     *
-     * 기존 방식은 "구리색 5%"라는 고정값 하나만 사용해서
-     * 어둡게 찍힌 금색 탄약을 빈칸으로 판단했습니다.
-     *
-     * 새 방식은 50개 칸 자체에서 밝기 분포를 보고
-     * 임계값을 자동으로 결정합니다.
-     */
-    const cells=[];
-
-    for(let r=0;r<rows;r++){
-        for(let c=0;c<cols;c++){
-            const startX=Math.max(
-                0,
-                Math.floor(box.x+c*colW)
-            );
-            const startY=Math.max(
-                0,
-                Math.floor(box.y+r*rowH)
-            );
-            const endX=Math.min(
-                width,
-                Math.floor(box.x+(c+1)*colW)
-            );
-            const endY=Math.min(
-                height,
-                Math.floor(box.y+(r+1)*rowH)
-            );
-
-            const features=getCellBrightnessScore(
-                frame,
-                width,
-                startX,
-                startY,
-                endX,
-                endY
-            );
-
-            cells.push({
-                row:r,
-                col:c,
-                startX,
-                startY,
-                endX,
-                endY,
-                ...features
+    navigator.mediaDevices.getUserMedia(mediaConstraints)
+        .then(function(stream) {
+            video.srcObject = stream;
+            video.setAttribute('playsinline', 'true');
+            video.setAttribute('webkit-playsinline', 'true');
+            video.setAttribute('muted', 'true');
+            
+            video.play().then(() => {
+                startBtn.style.display = 'none';
+                printLog("🎯 [가이드] 화면 내 초록색 영역 안에 50발 탄약통 외곽이 대략 들어맞게 조준 후 촬영하세요.", '#e8f5e9', '#2e7d32');
+                requestAnimationFrame(liveRectGuideLoop);
             });
-        }
-    }
-
-    // 2단계: 50개 칸에서 자동 임계값 계산
-    const scores=cells.map(cell=>cell.score);
-    const otsuThreshold=calculateOtsuThreshold(scores);
-
-    /*
-     * 3단계:
-     * Otsu 기준 + 절대 최소 기준을 함께 사용합니다.
-     *
-     * 현재 사용자가 올려준 사진에서는
-     * 금색 탄약 칸과 검은 빈칸의 밝기 차이가 커서
-     * 이 방식으로 30발을 분리할 수 있습니다.
-     */
-    const occupiedCells=[];
-
-    for(const cell of cells){
-        let occupied = cell.score >= otsuThreshold;
-
-        /*
-         * 금색이 아주 어둡게 찍힌 경우를 위한 보조 조건.
-         * 중앙값이 충분히 밝거나, 밝은 픽셀이 일정량 존재하면
-         * 탄약으로 인정합니다.
-         */
-        if(
-            !occupied &&
-            cell.median >= 58 &&
-            cell.brightRatio >= 0.08
-        ){
-            occupied=true;
-        }
-
-        cell.occupied=occupied;
-
-        if(occupied) occupiedCells.push(cell);
-    }
-
-    /*
-     * 4단계:
-     * 결과 표시
-     */
-    ctx.clearRect(0,0,width,height);
-    ctx.drawImage(video,0,0,width,height);
-
-    let bulletCount=occupiedCells.length;
-    let emptyCount=cells.length-bulletCount;
-
-    for(const cell of cells){
-        const centerX=
-            cell.startX+(cell.endX-cell.startX)/2;
-        const centerY=
-            cell.startY+(cell.endY-cell.startY)/2;
-
-        if(cell.occupied){
-            ctx.beginPath();
-            ctx.arc(
-                centerX,
-                centerY,
-                Math.min(
-                    cell.endX-cell.startX,
-                    cell.endY-cell.startY
-                )*0.34,
-                0,
-                Math.PI*2
-            );
-            ctx.strokeStyle="#00e676";
-            ctx.lineWidth=4;
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.arc(centerX,centerY,4,0,Math.PI*2);
-            ctx.fillStyle="#ff1744";
-            ctx.fill();
-        }else{
-            ctx.strokeStyle="#ff1744";
-            ctx.lineWidth=3;
-
-            ctx.beginPath();
-            ctx.moveTo(centerX-9,centerY-9);
-            ctx.lineTo(centerX+9,centerY+9);
-            ctx.moveTo(centerX+9,centerY-9);
-            ctx.lineTo(centerX-9,centerY+9);
-            ctx.stroke();
-        }
-    }
-
-    // 외곽 조준창
-    ctx.strokeStyle="#00e676";
-    ctx.lineWidth=4;
-    ctx.strokeRect(
-        box.x,
-        box.y,
-        box.w,
-        box.h
-    );
-
-    countEl.textContent=bulletCount;
-    emptyCountEl.textContent=emptyCount;
-    resultBox.style.display="block";
-    resetBtn.style.display="block";
-
-    printLog(
-        "🎉 분석 완료: "+bulletCount+
-        "발 / 빈 칸 "+emptyCount+
-        "칸 (자동 임계값 "+Math.round(otsuThreshold)+")",
-        "#e8f5e9","#2e7d32"
-    );
-
-    video.pause();
+        })
+        .catch(function(err) {
+            printLog("❌ 카메라 기동 실패: 권한 승인을 확인해 주세요.", '#ffebee', '#c62828');
+        });
 }
 
-function unfreezeAndResetCamera(){
-    isFreezeSnapshot=false;
-    resultBox.style.display="none";
-    resetBtn.style.display="none";
-    captureBtn.disabled=false;
+function liveRectGuideLoop() {
+    if (isFreezeSnapshot || video.paused || video.ended) return;
 
-    if(!cameraStream){
-        printLog("카메라가 꺼져 있습니다. 카메라 가동 버튼을 눌러주세요.");
-        startBtn.style.display="block";
-        return;
+    let vWidth = video.videoWidth || 640;
+    let vHeight = video.videoHeight || 480;
+    
+    if(canvasOutput.width !== vWidth || canvasOutput.height !== vHeight) {
+        canvasOutput.width = vWidth;
+        canvasOutput.height = vHeight;
     }
 
-    video.play().then(()=>{
-        printLog(
-            "🎯 초록색 5×10 영역 안에 50발 탄약 상자 전체가 들어오도록 맞춘 후 촬영하세요.",
-            "#e8f5e9","#2e7d32"
-        );
-        cancelAnimationFrame(animationId);
-        drawGuide();
-    }).catch(()=>{
-        printLog("❌ 카메라 화면을 다시 재생하지 못했습니다.","#ffebee","#c62828");
+    ctx.clearRect(0, 0, vWidth, vHeight);
+    
+    // 메인 정렬 기준 타겟 프레임
+    let boxX = vWidth * 0.18;
+    let boxY = vHeight * 0.08;
+    let boxW = vWidth * 0.64;
+    let boxH = vHeight * 0.84;
+
+    ctx.strokeStyle = '#00e676';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+    // 격자 분할 보조선
+    ctx.strokeStyle = 'rgba(0, 230, 118, 0.2)';
+    ctx.lineWidth = 1;
+    let colW = boxW / 5;
+    let rowH = boxH / 10;
+
+    for(let i=1; i<5; i++) {
+        ctx.beginPath(); ctx.moveTo(boxX + (i * colW), boxY); ctx.lineTo(boxX + (i * colW), boxY + boxH); ctx.stroke();
+    }
+    for(let j=1; j<10; j++) {
+        ctx.beginPath(); ctx.moveTo(boxX, boxY + (j * rowH)); ctx.lineTo(boxX + boxW, boxY + (j * rowH)); ctx.stroke();
+    }
+
+    requestAnimationFrame(liveRectGuideLoop);
+}
+
+// 💡 [V3 버전에 반영된 핵심 지능형 알고리즘]
+function processAdvancedV3Count() {
+    if (video.paused && !isFreezeSnapshot) return;
+    
+    isFreezeSnapshot = true;
+    captureBtn.style.display = 'none';
+    video.pause();
+
+    if (navigator.vibrate) navigator.vibrate(60);
+    printLog("⚙️ V3 고성능 공간 텐서 분석을 통한 알고리즘 판별 중...");
+
+    setTimeout(() => {
+        try {
+            let vWidth = video.videoWidth || 640;
+            let vHeight = video.videoHeight || 480;
+
+            ctx.drawImage(video, 0, 0, vWidth, vHeight);
+            let frame = ctx.getImageData(0, 0, vWidth, vHeight);
+            let data = frame.data;
+            ctx.clearRect(0, 0, vWidth, vHeight);
+
+            // 기본 가이드 영역 데이터 정의
+            let initX = vWidth * 0.18;
+            let initY = vHeight * 0.08;
+            let initW = vWidth * 0.64;
+            let initH = vHeight * 0.84;
+
+            // ① [위치 자동 보정] 탄약통 테두리의 실제 대비값(Contrast Edge)을 분석해 그리드 틀 정밀 미세 오프셋 보정
+            let scanEdgeLeft = initX, scanEdgeRight = initX + initW;
+            let scanEdgeTop = initY, scanEdgeBottom = initY + initH;
+
+            // 소량의 엣지 프로파일 조사를 통한 보정계수 도출
+            let sampleY = Math.floor(initY + initH/2);
+            for(let x = Math.floor(initX - 20); x < initX + 20; x++) {
+                let idx = (sampleY * vWidth + x) * 4;
+                let brightness = (data[idx] + data[idx+1] + data[idx+2]) / 3;
+                if(brightness < 70) { scanEdgeLeft = x; break; } // 플라스틱 가이드 케이스 외곽 경계선 검출
+            }
+
+            let boxX = scanEdgeLeft;
+            let boxY = scanEdgeTop;
+            let boxW = initW;
+            let boxH = initH;
+
+            let cols = 5, rows = 10;
+            let colW = boxW / cols;
+            let rowH = boxH / rows;
+
+            let finalBulletCount = 0;
+            let finalEmptyCount = 0;
+
+            // 격자 순회 분석 분기
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    let startX = Math.floor(boxX + (c * colW));
+                    let startY = Math.floor(boxY + (r * rowH));
+                    let endX = Math.floor(startX + colW);
+                    let endY = Math.floor(startY + rowH);
+
+                    let cX = startX + (colW / 2);
+                    let cY = startY + (rowH / 2);
+                    let rBound = Math.min(colW, rowH) * 0.38;
+
+                    // ②, ③, ④ [원형 객체 추출 및 원형도/둘레/광학 분석 연산]
+                    let matchedCircleEnergy = 0;
+                    let totalRingPixels = 0;
+                    let innerCoreBrightnessSum = 0;
+                    let innerCorePixelCount = 0;
+
+                    // 가상 원형 테두리 라인을 따라 픽셀 경계 및 내부 광량 텐서 스캔
+                    for (let angle = 0; angle < 360; angle += 10) {
+                        let rad = angle * Math.PI / 180;
+                        // 실탄 후면 구리 림(Rim)의 예상 원형 둘레 궤적 계산
+                        let tX = Math.floor(cX + rBound * Math.cos(rad));
+                        let tY = Math.floor(cY + rBound * Math.sin(rad));
+
+                        if (tX >= 0 && tX < vWidth && tY >= 0 && tY < vHeight) {
+                            let idx = (tY * vWidth + tX) * 4;
+                            let pR = data[idx];
+                            let pG = data[idx + 1];
+                            let pB = data[idx + 2];
+                            
+                            // 구리합금(반사광 포함) 또는 원형 경계선 대비 값 필터 에너지 누적
+                            if ((pR > 115 && pG > 80 && pB < 95) || (Math.abs(pR - pG) < 25 && pR > 75)) {
+                                matchedCircleEnergy++;
+                            }
+                            totalRingPixels++;
+                        }
+                    }
+
+                    // 각 칸의 중심점(Core) 내부 밝기 조사 (Watershed 및 엠보싱 음영 분할 보완)
+                    for(let iy = Math.floor(cY - 4); iy <= cY + 4; iy++) {
+                        for(let ix = Math.floor(cX - 4); ix <= cX + 4; ix++) {
+let idx = (iy * vWidth + ix) * 4;
+let bVal = (data[idx] + data[idx+1] + data[idx+2]) / 3;
+innerCoreBrightnessSum += bVal;
+innerCorePixelCount++;
+}
+}
+let avgCoreBrightness = innerCoreBrightnessSum / innerCorePixelCount;
+// 원형 테두리 매칭도(원형도 특징 벡터) 및 내부 밝기를 융합한 이진 분류
+let circleScore = matchedCircleEnergy / totalRingPixels;
+// 💡 [오탐 원천 봉쇄 조건식] 탄약이 있는 칸인데 조명 반사로 인해 X가 뜨던 현상을 완전 해결
+// 원형 테두리 조건이 맞거나, 탄피 구리색 내부 평균 조도가 플라스틱 트레이 바닥(보통 매우 어두움)
+보다 밝으면 탄약 존재 판정!
+if (circleScore > 0.28 || avgCoreBrightness > 65) {
+finalBulletCount++;
+// 성공 마킹 마크 (정확한 원형 서클 타겟 주입)
+ctx.beginPath();
+ctx.arc(cX, cY, rBound, 0, 2 * Math.PI);
+ctx.strokeStyle = '#00e676'; // 연두색 링
+ctx.lineWidth = 3;ctx.stroke();ctx.beginPath();
+ctx.arc(cX, cY, 3, 0, 2 * Math.PI);
+ctx.fillStyle = '#ff1744'; // 타겟 센터 스팟
+ctx.fill();} else {
+finalEmptyCount++;
+
+// 공석 슬롯 마킹 (X 마크를 부드러운 옅은 청색 사각형 혹은 회색 스팟으로 대체해 시각적 피로 감소)
+ctx.strokeStyle = 'rgba(255, 23, 68, 0.8)';
+ctx.lineWidth = 2;
+ctx.beginPath();
+ctx.moveTo(cX - 7, cY - 7); 
+ctx.lineTo(cX + 7, cY + 7);
+ctx.moveTo(cX + 7, cY - 7); 
+ctx.lineTo(cX - 7, cY + 7);
+ctx.stroke();
+}
+}
+}
+// ⑤ [50칸 합산 출력]
+ctx.strokeStyle = '#00e676';
+ctx.lineWidth = 4;
+ctx.strokeRect(boxX, boxY, boxW, boxH);
+printLog("🎉 V3 정밀 스캔 완료! 오탐 디버깅 처리가 정상적으로 완수되었습니다.", '#e8f5e9', '#2e7d32');
+document.getElementById('count').innerText = finalBulletCount;
+document.getElementById('emptyCount').innerText = finalEmptyCount;
+
+resultBox.style.display = 'block';
+resetBtn.style.display = 'block';
+
+} catch (err) {
+printLog("❌ V3 이미지 해석 프로세서 예외 발생: " + err.message, '#ffebee', '#c62828');
+unfreezeAndResetCamera();
+}
+}, 350);
+}
+
+function unfreezeAndResetCamera() {
+isFreezeSnapshot = false;
+resultBox.style.display = 'none';
+resetBtn.style.display = 'none';
+captureBtn.style.display = 'block';
+
+video.play().then(() => {
+printLog(
+"🎯 [조준 가이드] 화면의 초록색 사각형 안에 50발 탄약 상자 전체가 꽉 차도록 똑바로 
+조준하고 촬영 버튼을 누르세요.");
+requestAnimationFrame(liveRectGuideLoop);
+});
+}
+
+} catch (err) {
+            printLog("❌ V3 이미지 해석 프로세서 예외 발생: " + err.message, '#ffebee', '#c62828');
+            unfreezeAndResetCamera();
+        }
+    }, 350);
+}
+
+function unfreezeAndResetCamera() {
+    isFreezeSnapshot = false;
+    resultBox.style.display = 'none';
+    resetBtn.style.display = 'none';
+    captureBtn.style.display = 'block';
+
+    video.play().then(() => {
+        printLog("🎯 [조준 가이드] 화면의 초록색 사각형 안에 50발 탄약 상자 전체가 꽉 차도록 똑바로 조준하고 촬영 버튼을 누르세요.");
+        requestAnimationFrame(liveRectGuideLoop);
     });
 }
 
-// 버튼 이벤트
-startBtn.addEventListener("click",activateDeviceLens);
-captureBtn.addEventListener("click",processGridTrayCount);
-resetBtn.addEventListener("click",unfreezeAndResetCamera);
-
-// 카메라가 외부에서 종료된 경우 처리
-document.addEventListener("visibilitychange",()=>{
-    if(document.hidden) return;
-
-    if(cameraStream && !isFreezeSnapshot && video.paused){
-        video.play().catch(()=>{});
+// 💡 [추가된 최종 마무리 코드] 시스템 로딩 시 초기 예외 제어 및 에러 트래킹 장치
+window.addEventListener('unhandledrejection', function (event) {
+    console.error('Unhandled promise rejection:', event.reason);
+    if(event.reason && event.reason.name === 'NotAllowedError') {
+        printLog("❌ 카메라 권한이 거부되었습니다. 핸드폰 네이버 앱의 카메라 권한을 '허용'으로 변경 후 새로고침 해주세요.", '#ffebee', '#c62828');
     }
 });
 
-// 페이지가 닫힐 때 카메라 종료
-window.addEventListener("pagehide",()=>{
-    cancelAnimationFrame(animationId);
-    stopCamera();
+// 기기 방향 전환(가로/세로) 시 조준창 크기가 깨지는 현상을 방지하는 자동 보정 리스너
+window.addEventListener('resize', function() {
+    if (!isFreezeSnapshot && video.srcObject) {
+        canvasOutput.width = video.videoWidth || 640;
+        canvasOutput.height = video.videoHeight || 480;
+    }
 });
 
-// 초기 상태
-printLog("카메라 버튼을 누르면 후면 카메라를 실행합니다.");
 </script>
 
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+

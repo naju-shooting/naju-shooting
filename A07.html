@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>탄약 개수 실시간 파악</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; background: #f4f6f9; margin: 0; padding: 15px; }
+        .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+        h2 { margin: 5px 0 15px 0; color: #1a1a1a; font-size: 20px; }
+        
+        /* 메인 버튼 스타일 */
+        .start-btn { background: #2e7d32; color: white; border: none; padding: 15px 30px; font-size: 18px; font-weight: bold; border-radius: 30px; cursor: pointer; width: 100%; box-shadow: 0 4px 10px rgba(46,125,50,0.3); transition: all 0.2s; margin-bottom: 15px; }
+        .start-btn:active { transform: scale(0.98); box-shadow: 0 2px 5px rgba(46,125,50,0.2); }
+        
+        video { display: none; } 
+        .video-wrapper { position: relative; width: 100%; border-radius: 12px; overflow: hidden; background: #111; min-height: 280px; display: none; }
+        canvas { width: 100%; height: auto; display: block; }
+        
+        .result-box { margin-top: 15px; padding: 15px; background: #ffebee; border-radius: 10px; font-size: 24px; font-weight: bold; color: #c62828; display: none; }
+        .status { color: #444; font-size: 13px; margin-bottom: 15px; padding: 12px; background: #eee; border-radius: 8px; word-break: break-all; text-align: left; line-height: 1.5; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>실탄 개수 실시간 카운터</h2>
+    
+    <!-- 1. 보안 락을 해제하기 위해 사용자가 직접 누르는 물리 버튼 -->
+    <button id="startBtn" class="start-btn" onclick="initSystem()">🎯 카메라 및 AI 엔진 시작</button>
+
+    <!-- 실시간 상태창 -->
+    <div id="status" class="status">위의 초록색 버튼을 누르면 실탄 카운터가 시작됩니다.<br><small>*주의: 반드시 크롬/사파리 브라우저의 HTTPS 주소로 접속해야 합니다.</small></div>
+    
+    <!-- 비디오 및 연산 화면 영역 -->
+    <div id="videoWrapper" class="video-wrapper">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvasOutput"></canvas>
+    </div>
+    
+    <!-- 결과창 -->
+    <div id="resultBox" class="result-box">
+        검출된 실탄: <span id="count">0</span>발
+    </div>
+</div>
+
+<script>
+const startBtn = document.getElementById('startBtn');
+const statusDiv = document.getElementById('status');
+const videoWrapper = document.getElementById('videoWrapper');
+const resultBox = document.getElementById('resultBox');
+const video = document.getElementById('video');
+const canvasOutput = document.getElementById('canvasOutput');
+const ctx = canvasOutput.getContext('2d', { willReadFrequently: true });
+let isOpenCvReady = false;
+
+function log(msg, isError = false) {
+    statusDiv.innerText = msg;
+    if (isError) {
+        statusDiv.style.background = '#ffebee';
+        statusDiv.style.color = '#c62828';
+    } else {
+        statusDiv.style.background = '#e8f5e9';
+        statusDiv.style.color = '#2e7d32';
+    }
+}
+
+// [핵심 변경점] 사용자가 버튼을 눌렀을 때만 전체 코드가 순서대로 작동을 개시합니다.
+function initSystem() {
+    startBtn.style.display = 'none'; // 버튼 숨김
+    log("🔄 1단계: 브라우저 카메라 호환성 체크 중...");
+    
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        log("❌ 에러: 이 브라우저 혹은 주소는 하드웨어 카메라를 지원하지 않습니다.\n\n[원인]\n1. 주소창 맨 앞이 http:// 입니다. (반드시 https:// 주소여야만 켜집니다)\n2. 카카오톡/네이버 내부창으로 열었습니다. (반드시 스마트폰 크롬이나 사파리 앱을 직접 켜서 주소를 붙여넣으세요)", true);
+        return;
+    }
+    
+    log("🔄 2단계: 최적화 경량 컴퓨터 비전 엔진 주입 중...");
+    
+    // 외부 파일 로드 오류를 원천 차단하기 위해 단일 완결형 경량 오픈소스 서버망에서 동적으로 꽂아 넣습니다.
+    const script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.async = true;
+    script.src = 'https://opencv.org';
+    
+    script.onload = function() {
+        log("🔄 3단계: AI 모듈 압축 해제 및 코어 안착 중...");
+        verifyCvEngine();
+    };
+    
+    script.onerror = function() {
+        log("❌ 에러: 컴퓨터 비전 파일 전송 실패. 스마트폰의 네트워크 상태를 확인하시거나 새로고침 후 다시 버튼을 눌러주세요.", true);
+    };
+    
+    document.head.appendChild(script);
+}
+
+function verifyCvEngine() {
+    if (typeof cv !== 'undefined' && cv.matFromArray) {
+        log("🔄 4단계: 엔진 활성화 완료! 스마트폰 후면 카메라 하드웨어에 접속합니다.");
+        isOpenCvReady = true;
+        openMobileCamera();
+    } else {
+        setTimeout(verifyCvEngine, 300);
+    }
+}
+
+function openMobileCamera() {
+    // 하드웨어 충돌을 막기 위해 디바이스에 유연한 형태(ideal)로 후면 카메라를 강제합니다.
+    const constraints = {
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false
+    };
+
+    navigator.mediaDevices.getUserMedia(constraints)
+        .then(function(stream) {
+            video.srcObject = stream;
+            video.setAttribute('playsinline', true);
+            video.setAttribute('muted', true);
+            video.play();
+            
+            // 카메라와 캔버스 인터페이스 배치 활성화
+            videoWrapper.style.display = 'block';
+            resultBox.style.display = 'block';
+            log("🎯 카메라 연동 성공! 실탄 상자의 뒷면(황금색 원형)이 수직으로 보이도록 화면 중앙에 똑바로 비춰주세요.");
+            
+            video.addEventListener('canplay', () => {
+                canvasOutput.width = video.videoWidth;
+                canvasOutput.height = video.videoHeight;
+                setTimeout(analysisLoop, 33);
+            });
+        })
+        .catch(function(err) {
+            log(`❌ 카메라 장치 연결 거부당함\n에러명: ${err.name}\n\n[조치방법] 스마트폰 설정 또는 브라우저 주소창 왼쪽 자물쇠 버튼을 눌러 거부된 카메라 권한을 '허용'으로 바꾸고 다시 시도하세요.`, true);
+        });
+}
+
+function analysisLoop() {
+    if (!isOpenCvReady || video.paused || video.ended) {
+        return;
+    }
+
+    try {
+        let src = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
+        ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+        let imgData = ctx.getImageData(0, 0, video.videoWidth, video.videoHeight);
+        src.data.set(imgData.data);
+
+        let gray = new cv.Mat();
+        let circles = new cv.Mat();
+
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        cv.GaussianBlur(gray, gray, new cv.Size(7, 7), 1.5, 1.5);
+
+        // 실탄 격자 구조 매칭용 스펙 값 튜닝
+        cv.HoughCircles(gray, circles, cv.HOUGH_GRADIENT, 1, 22, 45, 16, 10, 28);
+
+        let count = 0;
+        if (circles.cols > 0) {
+            count = circles.cols;
+            for (let i = 0; i < circles.cols; ++i) {
+                let x = circles.data32F[i * 3];
+                let y = circles.data32F[i * 3 + 1];
+                let radius = circles.data32F[i * 3 + 2];
+                let center = new cv.Point(x, y);
+                cv.circle(src, center, radius,, 2);
+                cv.circle(src, center, 2,, -1);
+            }
+        }
+
+        document.getElementById('count').innerText = count;
+        cv.imshow('canvasOutput', src);
+
+        src.delete();
+        gray.delete();
+        circles.delete();
+
+    } catch (err) {
+        console.error(err);
+    }
+
+    requestAnimationFrame(analysisLoop);
+}
+</script>
+
+</body>
+</html>

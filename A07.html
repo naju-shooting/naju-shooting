@@ -283,9 +283,170 @@ async function activateDeviceLens(){
     }
 }
 
+function calculateOtsuThreshold(values){
+    // 50개 칸의 밝기 점수로 자동 임계값을 계산합니다.
+    // 현재 사진처럼 "금색 탄약 / 검은 빈칸"이 뚜렷하게 나뉘는 경우
+    // 고정된 구리색 비율보다 훨씬 안정적입니다.
+    const hist = new Array(256).fill(0);
+
+    for(const value of values){
+        const v = Math.max(0, Math.min(255, Math.round(value)));
+        hist[v]++;
+    }
+
+    const total = values.length;
+    let sumAll = 0;
+
+    for(let i=0;i<256;i++) sumAll += i * hist[i];
+
+    let weightBackground = 0;
+    let sumBackground = 0;
+    let bestVariance = -1;
+    let bestThreshold = 55;
+
+    for(let t=0;t<256;t++){
+        weightBackground += hist[t];
+
+        if(weightBackground === 0) continue;
+
+        const weightForeground = total - weightBackground;
+        if(weightForeground === 0) break;
+
+        sumBackground += t * hist[t];
+
+        const meanBackground = sumBackground / weightBackground;
+        const meanForeground =
+            (sumAll - sumBackground) / weightForeground;
+
+        const betweenClassVariance =
+            weightBackground *
+            weightForeground *
+            Math.pow(meanBackground - meanForeground, 2);
+
+        if(betweenClassVariance > bestVariance){
+            bestVariance = betweenClassVariance;
+            bestThreshold = t;
+        }
+    }
+
+    /*
+     * 아주 어두운 사진에서 Otsu가 지나치게 낮은 기준을 만드는 것을 방지.
+     * 반대로 밝은 사진에서는 Otsu 값을 그대로 사용합니다.
+     */
+    return Math.max(45, bestThreshold);
+}
+
+function getCellBrightnessScore(imageData, width, x1, y1, x2, y2){
+    /*
+     * 한 칸 전체를 단순히 구리색 픽셀로 세지 않습니다.
+
+     * 탄약:
+     *  - 전체적으로 밝음
+     *  - 금색/황색 계열
+     *
+     * 빈 칸:
+     *  - 전체적으로 매우 어두움
+     *  - 일부 반사광이 있어도 중앙 대부분은 어두움
+     *
+     * 따라서 중앙 영역의 "중앙값 밝기" + "밝은 픽셀 비율" +
+     * "따뜻한 색상 비율"을 함께 사용합니다.
+     */
+    const grayValues = [];
+    let brightCount = 0;
+    let warmCount = 0;
+    let samples = 0;
+
+    const marginX = Math.floor((x2-x1)*0.20);
+    const marginY = Math.floor((y2-y1)*0.20);
+
+    const sx = x1 + marginX;
+    const ex = x2 - marginX;
+    const sy = y1 + marginY;
+    const ey = y2 - marginY;
+
+    for(let y=sy;y<ey;y+=2){
+        for(let x=sx;x<ex;x+=2){
+            const idx=(y*width+x)*4;
+
+            const r=imageData.data[idx];
+            const g=imageData.data[idx+1];
+            const b=imageData.data[idx+2];
+
+            // 사람 눈의 밝기에 가까운 간단한 luminance
+            const luminance =
+                0.299*r + 0.587*g + 0.114*b;
+
+            grayValues.push(luminance);
+
+            if(luminance >= 90) brightCount++;
+
+            // 금색/황색 계열 보조 점수
+            if(
+                r > 105 &&
+                g > 70 &&
+                b < 125 &&
+                r > b*1.15 &&
+                g > b*1.05
+            ){
+                warmCount++;
+            }
+
+            samples++;
+        }
+    }
+
+    if(samples === 0){
+        return {
+            score:0,
+            median:0,
+            brightRatio:0,
+            warmRatio:0
+        };
+    }
+
+    grayValues.sort((a,b)=>a-b);
+
+    const middle=Math.floor(grayValues.length/2);
+    const median =
+        grayValues.length % 2
+        ? grayValues[middle]
+        : (grayValues[middle-1]+grayValues[middle])/2;
+
+    const brightRatio=brightCount/samples;
+    const warmRatio=warmCount/samples;
+
+    /*
+     * 핵심 점수:
+     * 중앙값을 가장 중요하게 보고,
+     * 밝은 픽셀/금색 픽셀을 보조합니다.
+     *
+     * 실제 사진에서는 금색 탄약이 어둡게 찍혀도
+     * 중앙값이 빈 검은 칸보다 훨씬 높게 나옵니다.
+     */
+    const score =
+        median * 0.72 +
+        brightRatio * 60 +
+        warmRatio * 25;
+
+    return {
+        score,
+        median,
+        brightRatio,
+        warmRatio
+    };
+}
+
 function processGridTrayCount(){
-    if(!cameraStream || !video.srcObject || video.readyState<2 || video.videoWidth===0){
-        printLog("❌ 먼저 스마트폰 카메라를 켜주세요.","#ffebee","#c62828");
+    if(
+        !cameraStream ||
+        !video.srcObject ||
+        video.readyState < 2 ||
+        video.videoWidth === 0
+    ){
+        printLog(
+            "❌ 먼저 스마트폰 카메라를 켜주세요.",
+            "#ffebee","#c62828"
+        );
         return;
     }
 
@@ -297,14 +458,15 @@ function processGridTrayCount(){
 
     if(navigator.vibrate) navigator.vibrate(60);
 
-    printLog("⚙️ 촬영된 화면에서 5×10 = 50칸을 분석하는 중입니다...");
+    printLog(
+        "⚙️ 50칸의 밝기·색상·명암을 자동 보정하여 분석 중입니다..."
+    );
 
-    // pause하기 전에 현재 영상을 canvas에 복사
     const {width,height}=setCanvasSize();
+
+    // 촬영된 실제 프레임을 먼저 보관
     ctx.drawImage(video,0,0,width,height);
 
-    // 분석용 원본 이미지를 별도 캔버스에 복사하지 않아도
-    // 현재 canvas의 ImageData를 바로 사용할 수 있음
     const frame=ctx.getImageData(0,0,width,height);
 
     const box=getGuideBox(width,height);
@@ -313,116 +475,164 @@ function processGridTrayCount(){
     const colW=box.w/cols;
     const rowH=box.h/rows;
 
-    let bulletCount=0;
-    let emptyCount=0;
-
-    // 결과 표시용 캔버스를 깨끗하게 만들고 원본 사진을 다시 그림
-    ctx.clearRect(0,0,width,height);
-    ctx.drawImage(video,0,0,width,height);
+    /*
+     * 1단계:
+     * 50개 칸의 점수를 먼저 모두 계산합니다.
+     *
+     * 기존 방식은 "구리색 5%"라는 고정값 하나만 사용해서
+     * 어둡게 찍힌 금색 탄약을 빈칸으로 판단했습니다.
+     *
+     * 새 방식은 50개 칸 자체에서 밝기 분포를 보고
+     * 임계값을 자동으로 결정합니다.
+     */
+    const cells=[];
 
     for(let r=0;r<rows;r++){
         for(let c=0;c<cols;c++){
-            const startX=Math.max(0,Math.floor(box.x+c*colW));
-            const startY=Math.max(0,Math.floor(box.y+r*rowH));
-            const endX=Math.min(width,Math.floor(box.x+(c+1)*colW));
-            const endY=Math.min(height,Math.floor(box.y+(r+1)*rowH));
+            const startX=Math.max(
+                0,
+                Math.floor(box.x+c*colW)
+            );
+            const startY=Math.max(
+                0,
+                Math.floor(box.y+r*rowH)
+            );
+            const endX=Math.min(
+                width,
+                Math.floor(box.x+(c+1)*colW)
+            );
+            const endY=Math.min(
+                height,
+                Math.floor(box.y+(r+1)*rowH)
+            );
 
-            // 테두리/격자에 영향을 덜 받도록 칸 가장자리를 18%씩 제외
-            const marginX=Math.floor((endX-startX)*0.18);
-            const marginY=Math.floor((endY-startY)*0.18);
+            const features=getCellBrightnessScore(
+                frame,
+                width,
+                startX,
+                startY,
+                endX,
+                endY
+            );
 
-            const x1=startX+marginX;
-            const x2=endX-marginX;
-            const y1=startY+marginY;
-            const y2=endY-marginY;
-
-            let copper=0;
-            let samples=0;
-
-            // 너무 작은 영역은 보호
-            if(x2<=x1 || y2<=y1) continue;
-
-            for(let y=y1;y<y2;y+=2){
-                for(let x=x1;x<x2;x+=2){
-                    const idx=(y*width+x)*4;
-                    const red=frame.data[idx];
-                    const green=frame.data[idx+1];
-                    const blue=frame.data[idx+2];
-
-                    /*
-                     * 원래 코드의 구리색 조건을 유지하되
-                     * 너무 어두운/노이즈성 픽셀의 영향을 줄임.
-                     */
-                    const warmCopper =
-                        red>125 &&
-                        green>75 &&
-                        blue<105 &&
-                        red>green*1.08 &&
-                        green>blue*1.15;
-
-                    if(warmCopper) copper++;
-                    samples++;
-                }
-            }
-
-            const ratio=samples ? copper/samples : 0;
-            const centerX=startX+(endX-startX)/2;
-            const centerY=startY+(endY-startY)/2;
-
-            // 원래 기준 5%를 유지
-            const occupied=ratio>=0.05;
-
-            if(occupied){
-                bulletCount++;
-
-                ctx.beginPath();
-                ctx.arc(
-                    centerX,
-                    centerY,
-                    Math.min(endX-startX,endY-startY)*0.34,
-                    0,Math.PI*2
-                );
-                ctx.strokeStyle="#00e676";
-                ctx.lineWidth=4;
-                ctx.stroke();
-
-                ctx.beginPath();
-                ctx.arc(centerX,centerY,4,0,Math.PI*2);
-                ctx.fillStyle="#ff1744";
-                ctx.fill();
-            }else{
-                emptyCount++;
-
-                ctx.strokeStyle="#ff1744";
-                ctx.lineWidth=3;
-
-                ctx.beginPath();
-                ctx.moveTo(centerX-9,centerY-9);
-                ctx.lineTo(centerX+9,centerY+9);
-                ctx.moveTo(centerX+9,centerY-9);
-                ctx.lineTo(centerX-9,centerY+9);
-                ctx.stroke();
-            }
+            cells.push({
+                row:r,
+                col:c,
+                startX,
+                startY,
+                endX,
+                endY,
+                ...features
+            });
         }
     }
 
-    // 최종 외곽선
+    // 2단계: 50개 칸에서 자동 임계값 계산
+    const scores=cells.map(cell=>cell.score);
+    const otsuThreshold=calculateOtsuThreshold(scores);
+
+    /*
+     * 3단계:
+     * Otsu 기준 + 절대 최소 기준을 함께 사용합니다.
+     *
+     * 현재 사용자가 올려준 사진에서는
+     * 금색 탄약 칸과 검은 빈칸의 밝기 차이가 커서
+     * 이 방식으로 30발을 분리할 수 있습니다.
+     */
+    const occupiedCells=[];
+
+    for(const cell of cells){
+        let occupied = cell.score >= otsuThreshold;
+
+        /*
+         * 금색이 아주 어둡게 찍힌 경우를 위한 보조 조건.
+         * 중앙값이 충분히 밝거나, 밝은 픽셀이 일정량 존재하면
+         * 탄약으로 인정합니다.
+         */
+        if(
+            !occupied &&
+            cell.median >= 58 &&
+            cell.brightRatio >= 0.08
+        ){
+            occupied=true;
+        }
+
+        cell.occupied=occupied;
+
+        if(occupied) occupiedCells.push(cell);
+    }
+
+    /*
+     * 4단계:
+     * 결과 표시
+     */
+    ctx.clearRect(0,0,width,height);
+    ctx.drawImage(video,0,0,width,height);
+
+    let bulletCount=occupiedCells.length;
+    let emptyCount=cells.length-bulletCount;
+
+    for(const cell of cells){
+        const centerX=
+            cell.startX+(cell.endX-cell.startX)/2;
+        const centerY=
+            cell.startY+(cell.endY-cell.startY)/2;
+
+        if(cell.occupied){
+            ctx.beginPath();
+            ctx.arc(
+                centerX,
+                centerY,
+                Math.min(
+                    cell.endX-cell.startX,
+                    cell.endY-cell.startY
+                )*0.34,
+                0,
+                Math.PI*2
+            );
+            ctx.strokeStyle="#00e676";
+            ctx.lineWidth=4;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(centerX,centerY,4,0,Math.PI*2);
+            ctx.fillStyle="#ff1744";
+            ctx.fill();
+        }else{
+            ctx.strokeStyle="#ff1744";
+            ctx.lineWidth=3;
+
+            ctx.beginPath();
+            ctx.moveTo(centerX-9,centerY-9);
+            ctx.lineTo(centerX+9,centerY+9);
+            ctx.moveTo(centerX+9,centerY-9);
+            ctx.lineTo(centerX-9,centerY+9);
+            ctx.stroke();
+        }
+    }
+
+    // 외곽 조준창
     ctx.strokeStyle="#00e676";
     ctx.lineWidth=4;
-    ctx.strokeRect(box.x,box.y,box.w,box.h);
+    ctx.strokeRect(
+        box.x,
+        box.y,
+        box.w,
+        box.h
+    );
 
-    // 결과
     countEl.textContent=bulletCount;
     emptyCountEl.textContent=emptyCount;
     resultBox.style.display="block";
     resetBtn.style.display="block";
 
     printLog(
-        "🎉 분석 완료: "+bulletCount+"발 / 빈 칸 "+emptyCount+"칸",
+        "🎉 분석 완료: "+bulletCount+
+        "발 / 빈 칸 "+emptyCount+
+        "칸 (자동 임계값 "+Math.round(otsuThreshold)+")",
         "#e8f5e9","#2e7d32"
     );
 
-    // 화면은 마지막 촬영 프레임에서 정지된 상태로 유지
     video.pause();
 }
 

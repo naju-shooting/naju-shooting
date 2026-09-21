@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>탄약상자 수량 카운터 (A07)</title>
+    <!-- TensorFlow.js 및 COCO-SSD 모델 로드 (객체 인식용) -->
+    <script src="https://jsdelivr.net"></script>
+    <script src="https://jsdelivr.net"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            text-align: center;
+        }
+        
+        /* 상단 네비게이션 바 스타일 */
+        .top-nav {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto 15px auto;
+        }
+
+        /* ⬅️ 탄약관리 이동 버튼 스타일 */
+        .nav-btn {
+            background-color: #333333;
+            color: #ffffff;
+            border: 1px solid #555555;
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none; /* 링크 밑줄 제거 */
+            display: inline-flex;
+            align-items: center;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        .nav-btn:hover {
+            background-color: #444444;
+        }
+
+        h1 { font-size: 1.5rem; margin: 10px 0 20px 0; color: #4CAF50; }
+        .container { position: relative; width: 100%; max-width: 500px; margin: 0 auto; }
+        video, canvas { width: 100%; border-radius: 8px; }
+        canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
+        .status-box {
+            background-color: #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        #count-num { color: #ffeb3b; font-size: 1.8rem; }
+        .btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+            width: 100%;
+            max-width: 500px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 상단 네비게이션 영역 -->
+    <div class="top-nav">
+        <a href="A04.html" class="nav-btn">⬅️ 탄약관리</a>
+    </div>
+
+    <h1>📦 실시간 탄약상자 카운터</h1>
+    
+    <div class="container">
+        <!-- 핸드폰 카메라 화면 출력 -->
+        <video id="webcam" autoplay playsinline muted></video>
+        <!-- 인식된 상자에 네모 박스를 그릴 캔버스 -->
+        <canvas id="overlay"></canvas>
+    </div>
+
+    <div class="status-box">
+        상태: <span id="status">모델 로딩 중...</span><br>
+        탐지된 탄약상자 수: <span id="count-num">0</span> 개
+    </div>
+
+    <button class="btn" id="capture-btn" disabled>📸 사진 촬영 및 분석</button>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('overlay');
+        const ctx = canvas.getContext('2d');
+        const statusText = document.getElementById('status');
+        const countNum = document.getElementById('count-num');
+        const captureBtn = document.getElementById('capture-btn');
+        
+        let model = null;
+
+        // 1. 카메라 시작 기능 (후면 카메라 우선 설정)
+        async function setupCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { exact: "environment" } },
+                    audio: false
+                });
+                video.srcObject = stream;
+            } catch (error) {
+                console.log("후면 카메라 없음, 기본 카메라로 대체합니다.");
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+            }
+            return new Promise((resolve) => {
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    resolve();
+                };
+            });
+        }
+
+        // 2. 객체 인식 AI 모델 로드
+        async function loadModel() {
+            statusText.innerText = "AI 모델 로드 중...";
+            model = await cocoSsd.load();
+            statusText.innerText = "준비 완료 (촬영 버튼을 누르세요)";
+            captureBtn.disabled = false;
+        }
+
+        // 3. 사진 분석 및 갯수 파악 기능
+        async function analyzeFrame() {
+            if (!model) return;
+            
+            statusText.innerText = "분석 중...";
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const predictions = await model.detect(video);
+            
+            // 일반 상자(box)나 가방 등을 임시 타겟으로 필터링
+            const targetObjects = predictions.filter(p => 
+                p.class === 'box' || p.class === 'suitcase' || p.class === 'cup'
+            );
+
+            targetObjects.forEach(prediction => {
+                const [x, y, width, height] = prediction.bbox;
+                
+                ctx.strokeStyle = '#4CAF50';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(x, y, width, height);
+
+                ctx.fillStyle = '#4CAF50';
+                ctx.font = '16px Arial';
+                ctx.fillText(`탄약상자 (${Math.round(prediction.score * 100)}%)`, x, y > 10 ? y - 5 : 10);
+            });
+
+            countNum.innerText = targetObjects.length;
+            statusText.innerText = "분석 완료";
+        }
+
+        captureBtn.addEventListener('click', analyzeFrame);
+
+        async function init() {
+            await setupCamera();
+            await loadModel();
+        }
+
+        init();
+    </script>
+</body>
+</html>

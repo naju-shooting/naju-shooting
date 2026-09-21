@@ -18,7 +18,7 @@
         }
         
         .video-box { position: relative; width: 100%; height: auto; background: #222; border-radius: 12px; overflow: hidden; min-height: 240px; }
-        #video { width: 100%; height: auto; display: block; }
+        #video { width: 100%; height: auto; display: block; background: #000; }
         #canvasOutput { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
         
         .timer-badge { display: inline-block; padding: 6px 12px; background: #ff9100; color: white; border-radius: 20px; font-size: 14px; font-weight: bold; margin-bottom: 10px; display: none; }
@@ -32,12 +32,14 @@
 <div class="container">
     <h2>🎯 나주 사격장 실탄 카운터</h2>
     
-    <button id="startBtn" class="start-btn">⚡ 스마트폰 카메라 켜기</button>
-    <div id="status" class="status">초록색 버튼을 터치하여 장치를 시작해 주세요.</div>
-    <div id="timerBadge" class="timer-badge">포커스 고정 중... 2초</div>
+    <button id="startBtn" class="start-btn">⚡ 스마트폰 후면 카메라 켜기</button>
+    <div id="status" class="status">초록색 버튼을 터치하면 갤럭시 S26 울트라의 메인 렌즈와 내장형 실탄 카운터가 즉시 가동됩니다.</div>
+    <div id="timerBadge" class="timer-badge">초점 고정 중... 2초</div>
     
     <div class="video-box">
+        <!-- 모바일 가속 및 인라인 재생 강제 부여 -->
         <video id="video" autoplay playsinline muted loop></video>
+        <!-- 실시간 테두리 가이드라인 캔버스 -->
         <canvas id="canvasOutput"></canvas>
     </div>
     
@@ -56,20 +58,18 @@ const canvasOutput = document.getElementById('canvasOutput');
 const resetBtn = document.getElementById('resetBtn');
 const ctx = canvasOutput.getContext('2d', { willReadFrequently: true });
 
-let isOpenCvReady = false;
 let isCaptured = false;
 let lastBulletCount = -1;
 let stableStartTime = 0;
 const STABLE_DURATION = 2000; // 2초 정지 대기
 
-// 모바일 환경에 따른 터치 이벤트 바인딩
 const eventType = ('ontouchstart' in window) ? 'touchstart' : 'click';
 
 startBtn.addEventListener(eventType, function(e) {
     e.preventDefault();
     startBtn.style.display = 'none'; 
-    printLog("🚀 [1단계] 갤럭시 S26 울트라 터치 확인! 후면 카메라 연동을 개시합니다...");
-    openDeviceHardware();
+    printLog("🚀 [1단계] 갤럭시 S26 울트라 후면 카메라 연동 신호 송출 중...");
+    openGalaxyCamera();
 }, { passive: false });
 
 function printLog(msg, bgColor = '#e3f2fd', textColor = '#0d47a1') {
@@ -78,19 +78,19 @@ function printLog(msg, bgColor = '#e3f2fd', textColor = '#0d47a1') {
     statusDiv.innerText = msg;
 }
 
-function openDeviceHardware() {
-    // 💡 최신 울트라 기기의 고해상도 폭주와 멀티 렌즈 꼬임을 예방하기 위해 해상도를 엄격히 규격화합니다.
+// 💡 외부 다운로드 완전 배제: 오직 하드웨어 카메라를 가장 안정적인 기본 규격으로 먼저 켭니다.
+function openGalaxyCamera() {
     const mediaConstraints = {
         video: { 
-            facingMode: { ideal: "environment" }, 
-            width: { exact: 640 },
-            height: { exact: 480 }
+            facingMode: { ideal: "environment" }, // 후면 렌즈 지정
+            width: { ideal: 640 },
+            height: { ideal: 480 }
         },
         audio: false
     };
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        printLog("❌ 에러: HTTPS 환경 혹은 모바일 크롬 앱 주소창에 직접 입력하여 접속하셔야 권한 락이 풀립니다.", '#ffebee', '#c62828');
+        printLog("❌ 에러: 크롬(Chrome) 앱 주소창에 직접 링크를 복사해 접속하셔야 하드웨어 차단이 해제됩니다.", '#ffebee', '#c62828');
         return;
     }
 
@@ -102,47 +102,21 @@ function openDeviceHardware() {
             video.setAttribute('muted', 'true');
             
             video.play().then(() => {
-                printLog("🚀 [2단계] 후면 카메라 영상 출력 성공! 실시간 비전 AI 엔진을 주입합니다...", '#e8f5e9', '#2e7d32');
-                injectOpenCvCore();
+                printLog("🎯 [작동 중] 카메라 송출 성공! 황금색 실탄을 화면 중앙에 정면으로 비추고 2초간 멈춰주세요.", '#e8f5e9', '#2e7d32');
+                // 별도의 OpenCV 다운로드 없이, 곧바로 자바스크립트 자체 영상 처리 엔진 가동
+                requestAnimationFrame(nativeVisionLoop);
             }).catch(playErr => {
                 printLog("❌ 재생 차단 정책 에러: " + playErr.message, '#ffebee', '#c62828');
             });
         })
         .catch(function(hardwareErr) {
-            // exact 해상도가 맞지 않는 환경일 경우 안전 다운그레이드 모드로 즉시 우회 구조 가동
-            printLog("🔄 초정밀 렌즈 세부 세팅 리매칭 중... (안전 모드 전환)");
-            const fallbackConstraints = {
-                video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 480 } },
-                audio: false
-            };
-            navigator.mediaDevices.getUserMedia(fallbackConstraints).then(function(fallbackStream) {
-                video.srcObject = fallbackStream;
-                video.play().then(() => {
-                    printLog("🚀 [2단계] 안전 규격으로 카메라 연동 성공! 비전 AI 엔진을 주입합니다...", '#e8f5e9', '#2e7d32');
-                    injectOpenCvCore();
-                });
-            }).catch(finalErr => {
-                printLog("❌ 카메라 하드웨어 연동 실패: 스마트폰 설정 ➔ 애플리케이션 ➔ Chrome ➔ 권한 메뉴에서 '카메라' 사용이 허용되어 있는지 꼭 확인하세요.", '#ffebee', '#c62828');
-            });
+            printLog("❌ 카메라 하드웨어 연동 실패: 갤럭시 설정 ➔ 애플리케이션 ➔ Chrome ➔ 권한 메뉴에서 '카메라'가 허용 상태인지 확인하세요.", '#ffebee', '#c62828');
         });
 }
 
-function injectOpenCvCore() {
-    const cdnScript = document.createElement('script');
-    cdnScript.type = 'text/javascript';
-    cdnScript.async = true;
-    cdnScript.src = 'https://opencv.org';
-    
-    cdnScript.onload = function() {
-        printLog("📸 [자동 측정 스탠바이] 실탄 상자를 비추고 2초간 흔들림을 멈춰주세요.", '#e8f5e9', '#2e7d32');
-        isOpenCvReady = true;
-        requestAnimationFrame(cvVisionProcessingLoop);
-    };
-    document.head.appendChild(cdnScript);
-}
-
-function cvVisionProcessingLoop() {
-    if (!isOpenCvReady || isCaptured || video.paused || video.ended) {
+// 💡 [독립형 웹 컴퓨터 비전 알고리즘] 외부 라이브러리 없이 실시간 원형(실탄 후면)을 정밀 계산
+function nativeVisionLoop() {
+    if (isCaptured || video.paused || video.ended) {
         return;
     }
 
@@ -155,49 +129,77 @@ function cvVisionProcessingLoop() {
             canvasOutput.height = vHeight;
         }
 
-        ctx.clearRect(0, 0, vWidth, vHeight);
-        
-        let src = new cv.Mat(vHeight, vWidth, cv.CV_8UC4);
+        // 1. 프레임 드로잉 및 데이터 세팅
         ctx.drawImage(video, 0, 0, vWidth, vHeight);
-        let imgData = ctx.getImageData(0, 0, vWidth, vHeight);
-        src.data.set(imgData.data);
+        let frame = ctx.getImageData(0, 0, vWidth, vHeight);
+        let data = frame.data;
 
-        let gray = new cv.Mat();
-        let circles = new cv.Mat();
-
-        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-        cv.GaussianBlur(gray, gray, new cv.Size(7, 7), 1.5, 1.5);
-
-        // .22LR 실탄 가이드 트레이 서클 파라미터 세팅
-        cv.HoughCircles(gray, circles, cv.HOUGH_GRADIENT, 1, 22, 45, 16, 10, 28);
-
+        // 2. 가상 투명 캔버스 레이어 초기화
         ctx.clearRect(0, 0, vWidth, vHeight);
-        let currentCount = 0;
-        if (circles.cols > 0) {
-            currentCount = circles.cols;
-            for (let i = 0; i < circles.cols; ++i) {
-                let x = circles.data32F[i * 3];
-                let y = circles.data32F[i * 3 + 1];
-                let radius = circles.data32F[i * 3 + 2];
-                
-                // 형광 연두색 동그라미 테두리 가이드라인
-                ctx.beginPath();
-                ctx.arc(x, y, radius, 0, 2 * Math.PI);
-                ctx.strokeStyle = '#00e676';
-                ctx.lineWidth = 3;
-                ctx.stroke();
-                
-                // 중심점 타겟팅 점
-                ctx.beginPath();
-                ctx.arc(x, y, 3, 0, 2 * Math.PI);
-                ctx.fillStyle = '#ff1744';
-                ctx.fill();
+
+        // 3. 황금색(탄피 후면 구리색) 픽셀 정밀 필터링 및 그룹화 연산
+        let points = [];
+        let step = 4; // 연산 가속화 스텝
+        
+        for (let y = 0; y < vHeight; y += step) {
+            for (let x = 0; x < vWidth; x += step) {
+                let idx = (y * vWidth + x) * 4;
+                let r = data[idx];
+                let g = data[idx + 1];
+                let b = data[idx + 2];
+
+                // 황금 구리색 탄피 컬러 범위 마스킹 수치
+                if (r > 130 && g > 90 && b < 70 && r > g && g > b) {
+                    points.push({x: x, y: y});
+                }
             }
         }
 
+        // 4. 필터링된 픽셀 그룹 기반 군집(Cluster)화로 원형 중심점 및 발수 도출
+        let circles = [];
+        let minDist = 22; // 실탄간 최소 거리 제한
+
+        for (let p of points) {
+            let found = false;
+            for (let c of circles) {
+                let d = Math.hypot(p.x - c.x, p.y - c.y);
+                if (d < minDist) {
+                    // 군집 중심점 누적 업데이트
+                    c.x = (c.x * c.count + p.x) / (c.count + 1);
+                    c.y = (c.y * c.count + p.y) / (c.count + 1);
+                    c.count++;
+                    found = true;
+                    break;
+                }
+            }
+            // 새로운 실탄 오브젝트 탐지 시 등록
+            if (!found && circles.length < 60) {
+                circles.push({x: p.x, y: p.y, count: 1});
+            }
+        }
+
+        // 유효한 크기를 가진 실탄 개수만 최종 필터링 (노이즈 방지)
+        let validCircles = circles.filter(c => c.count > 3);
+        let currentCount = validCircles.length;
+
+        // 5. 화면 위에 연두색 인식 테두리 및 붉은 중심 타겟점 드로잉
+        for (let c of validCircles) {
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, 14, 0, 2 * Math.PI); // .22LR 가이드 서클 반지름 고정
+            ctx.strokeStyle = '#00e676';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, 3, 0, 2 * Math.PI);
+            ctx.fillStyle = '#ff1744';
+            ctx.fill();
+        }
+
+        // 실시간 발수 UI 출력
         document.getElementById('count').innerText = currentCount;
 
-        // 💡 포커스 정지 감지 및 2초 카운트다운 타이머 실행 알고리즘
+        // 6. 2초 초점 정지 감지 알고리즘
         if (currentCount > 0 && currentCount === lastBulletCount) {
             let currentTime = Date.now();
             let elapsed = currentTime - stableStartTime;
@@ -208,7 +210,6 @@ function cvVisionProcessingLoop() {
 
             if (elapsed >= STABLE_DURATION) {
                 triggerSnapshot(currentCount);
-                src.delete(); gray.delete(); circles.delete();
                 return;
             }
         } else {
@@ -222,26 +223,35 @@ function cvVisionProcessingLoop() {
             }
         }
 
-        src.delete();
-        gray.delete();
-        circles.delete();
-
     } catch (err) {
         console.error(err);
     }
 
-    requestAnimationFrame(cvVisionProcessingLoop);
+    requestAnimationFrame(nativeVisionLoop);
 }
 
 function triggerSnapshot(finalCount) {
     isCaptured = true;
     timerBadge.style.display = 'none';
-    video.pause(); // 화면 정지 잠금
+    video.pause(); // 카메라 피드 일시정지 잠금
     
-    if (navigator.vibrate) navigator.vibrate(100); // 촬영 성공 진동 피드백
+    if (navigator.vibrate) navigator.vibrate(100); // 캡처 성공 진동 알림
     
-    printLog("🎉 측정 완료! 실탄 개수 데이터가 고정되었습니다.", '#e8f5e9', '#2e7d32');
+    printLog("🎉 측정 및 촬영 완료! 실탄 개수 데이터가 화면에 잠금되었습니다.", '#e8f5e9', '#2e7d32');
     document.getElementById('count').innerText = finalCount;
-    resetBtn.style.display = 'block'; // 재촬영 활성화
+    resetBtn.style.display = 'block';
 }
 
+function resetCapture() {
+    isCaptured = false;
+    lastBulletCount = -1;
+    resetBtn.style.display = 'none';
+    video.play().then(() => {
+        printLog("🎯 [작동 중] 카메라 송출 성공! 황금색 실탄을 화면 중앙에 정면으로 비추고 2초간 멈춰주세요.");
+        requestAnimationFrame(nativeVisionLoop);
+    });
+}
+</script>
+
+</body>
+</html>

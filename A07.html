@@ -2,266 +2,477 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#f4f6f9">
-<title>나주 사격장 실탄 카운터 A07</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#111827">
+<title>나주 사격장 실탄 카운터 (A07)</title>
 <style>
-html,body{margin:0;padding:0;width:100%;min-height:100%;background:#f4f6f9}
-body{font-family:-apple-system,BlinkMacSystemFont,"Noto Sans KR",sans-serif;color:#1a1a1a;padding:12px;box-sizing:border-box}
 *{box-sizing:border-box}
-.container{width:100%;max-width:600px;margin:0 auto;background:#fff;padding:18px;border-radius:16px;box-shadow:0 4px 16px rgba(0,0,0,.10)}
-h2{margin:4px 0 14px;font-size:20px}
-.start-btn,.capture-btn,.reset-btn{width:100%;border:0;border-radius:32px;padding:17px 18px;font-size:19px;font-weight:800;-webkit-appearance:none;appearance:none;touch-action:manipulation}
-.start-btn{background:#00e676;color:#000}
-.capture-btn{background:#ff1744;color:#fff;margin-top:14px}
-.reset-btn{background:#1e88e5;color:#fff;margin-top:12px;display:none}
-.status{margin:12px 0;padding:13px;border-radius:9px;background:#e3f2fd;color:#0d47a1;text-align:left;font-size:13px;font-weight:700;line-height:1.5;white-space:pre-line;word-break:break-word}
-.video-box{position:relative;width:100%;min-height:240px;background:#111;border-radius:12px;overflow:hidden}
-#video{display:block;width:100%;height:auto;background:#000}
-#canvasOutput{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
-.result{display:none;margin-top:14px;padding:18px;background:#e8f5e9;border:2px solid #81c784;border-radius:12px;color:#2e7d32;font-size:28px;font-weight:800}
-.note{font-size:12px;color:#666;line-height:1.5;margin-top:12px}
-.hidden{display:none!important}
+body{
+    font-family:-apple-system,BlinkMacSystemFont,"Noto Sans KR",sans-serif;
+    text-align:center;background:#f4f6f9;margin:0;padding:15px;
+}
+.container{
+    max-width:520px;margin:0 auto;background:#fff;padding:20px;
+    border-radius:16px;box-shadow:0 4px 16px rgba(0,0,0,.08);
+}
+h2{margin:5px 0 15px;color:#1a1a1a;font-size:20px}
+button{
+    appearance:none;-webkit-appearance:none;border:0;cursor:pointer;
+    font-weight:700;border-radius:35px;width:100%;
+}
+.start-btn{
+    background:#00e676;color:#000;padding:18px 25px;font-size:20px;
+    box-shadow:0 6px 20px rgba(0,230,118,.35);margin-bottom:15px;
+}
+.capture-btn{
+    background:#ff1744;color:#fff;padding:18px 25px;font-size:20px;
+    box-shadow:0 6px 20px rgba(255,23,68,.35);margin-top:15px;
+}
+.reset-btn{
+    background:#1e88e5;color:#fff;padding:15px 25px;font-size:18px;
+    box-shadow:0 6px 20px rgba(30,136,229,.35);margin-top:15px;display:none;
+}
+button:disabled{opacity:.55;cursor:not-allowed}
+.status{
+    color:#444;font-size:13px;margin-bottom:15px;padding:14px;
+    background:#eaeaea;border-radius:8px;word-break:break-all;
+    text-align:left;line-height:1.5;font-weight:700;
+}
+.video-box{
+    position:relative;width:100%;background:#111;border-radius:12px;
+    overflow:hidden;min-height:280px;
+}
+#video{
+    width:100%;height:auto;display:block;background:#000;
+    object-fit:contain;
+}
+#canvasOutput{
+    position:absolute;inset:0;width:100%;height:100%;
+    display:block;pointer-events:none;
+}
+.result-box{
+    margin-top:15px;padding:18px;background:#e8f5e9;border-radius:12px;
+    font-size:20px;font-weight:700;color:#2e7d32;display:none;
+    border:2px solid #81c784;text-align:left;line-height:1.7;
+}
+.result-box span.total-count{color:#d32f2f;font-size:32px}
+.help{
+    margin-top:12px;font-size:12px;color:#555;line-height:1.5;text-align:left;
+}
 </style>
 </head>
 <body>
+
 <div class="container">
-<h2>🎯 나주 사격장 실탄 카운터</h2>
+    <h2>🎯 나주 사격장 실탄 카운터</h2>
 
-<button id="startBtn" class="start-btn" type="button">⚡ 스마트폰 카메라 가동</button>
+    <button id="startBtn" class="start-btn">⚡ 스마트폰 카메라 가동</button>
 
-<div id="status" class="status">화면이 정상적으로 열렸습니다.
-초록색 버튼을 눌러 카메라를 시작하세요.</div>
+    <div id="status" class="status">
+        카메라 버튼을 누르면 후면 카메라를 실행합니다.
+    </div>
 
-<div class="video-box">
-  <video id="video" autoplay playsinline muted></video>
-  <canvas id="canvasOutput"></canvas>
-</div>
+    <div class="video-box">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvasOutput"></canvas>
+    </div>
 
-<button id="captureBtn" class="capture-btn" type="button">📸 실탄 개수 촬영하기</button>
-<button id="resetBtn" class="reset-btn" type="button">🔄 다시 촬영하기</button>
+    <button id="captureBtn" class="capture-btn" disabled>
+        📸 실탄 개수 촬영하기
+    </button>
 
-<div id="resultBox" class="result">
-검출 결과: <span id="count">0</span>발
-</div>
+    <button id="resetBtn" class="reset-btn">
+        🔄 다시 촬영하기
+    </button>
 
-<div class="note">
-카메라는 HTTPS 또는 localhost에서만 브라우저 보안정책상 사용할 수 있습니다.
-네이버/카카오톡 내부 브라우저가 아니라 휴대폰 Chrome에서 직접 접속하세요.
-</div>
+    <div id="resultBox" class="result-box">
+        📌 <b>50칸 격자 분석 결과</b><br>
+        • 채워진 칸(실탄): <span id="count" class="total-count">0</span>발<br>
+        • 비어있는 칸: <span id="emptyCount">0</span>칸
+    </div>
+
+    <div class="help">
+        ※ 현재 방식은 화면의 5×10 가상 격자 안에 탄약 1발씩 정확히 들어오는
+        <b>50칸 트레이</b>를 대상으로 합니다. 실제 탄약의 위치가 격자와 크게 어긋나거나
+        여러 발이 한 칸에 들어가면 정확도가 떨어질 수 있습니다.
+    </div>
 </div>
 
 <script>
 "use strict";
 
-let cameraStream = null;
-let frozen = false;
-
 const startBtn = document.getElementById("startBtn");
 const captureBtn = document.getElementById("captureBtn");
 const resetBtn = document.getElementById("resetBtn");
-const statusBox = document.getElementById("status");
+const statusDiv = document.getElementById("status");
 const video = document.getElementById("video");
-const canvas = document.getElementById("canvasOutput");
+const canvasOutput = document.getElementById("canvasOutput");
 const resultBox = document.getElementById("resultBox");
-const countBox = document.getElementById("count");
-const ctx = canvas.getContext("2d", {willReadFrequently:true});
+const countEl = document.getElementById("count");
+const emptyCountEl = document.getElementById("emptyCount");
+const ctx = canvasOutput.getContext("2d", {willReadFrequently:true});
 
-function status(text, ok){
-  statusBox.textContent = text;
-  statusBox.style.background = ok ? "#e8f5e9" : "#e3f2fd";
-  statusBox.style.color = ok ? "#2e7d32" : "#0d47a1";
+let cameraStream = null;
+let isFreezeSnapshot = false;
+let animationId = null;
+
+function printLog(msg, bg="#e3f2fd", color="#0d47a1"){
+    statusDiv.style.background = bg;
+    statusDiv.style.color = color;
+    statusDiv.textContent = msg;
 }
 
-async function startCamera(){
-  try{
-    if(!window.isSecureContext){
-      throw new Error("보안 연결이 아닙니다. 주소가 https:// 또는 localhost인지 확인하세요.");
+function isCameraAvailable(){
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+
+function stopCamera(){
+    if(cameraStream){
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
     }
+    video.srcObject = null;
+}
 
-    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-      throw new Error("현재 브라우저가 카메라 API를 지원하지 않습니다.");
+function getVideoSize(){
+    return {
+        width: video.videoWidth || 640,
+        height: video.videoHeight || 480
+    };
+}
+
+function setCanvasSize(){
+    const {width,height} = getVideoSize();
+    if(canvasOutput.width !== width || canvasOutput.height !== height){
+        canvasOutput.width = width;
+        canvasOutput.height = height;
     }
-
-    status("🚀 카메라 권한을 요청하고 있습니다...\n팝업이 나오면 '허용'을 눌러주세요.",false);
-
-    cameraStream = await navigator.mediaDevices.getUserMedia({
-      audio:false,
-      video:{
-        facingMode:{ideal:"environment"},
-        width:{ideal:1280},
-        height:{ideal:720}
-      }
-    });
-
-    video.srcObject = cameraStream;
-    video.muted = true;
-    video.setAttribute("playsinline","");
-    await video.play();
-
-    startBtn.classList.add("hidden");
-    status("🎯 카메라 연결 완료\n탄약상자를 화면 안에 넣고 아래 촬영 버튼을 누르세요.",true);
-    requestAnimationFrame(drawGuide);
-
-  }catch(e){
-    console.error(e);
-    status("❌ 카메라 실행 실패\n"+e.message+
-      "\n\n① Chrome 카메라 권한 허용\n② HTTPS 접속\n③ 네이버/카카오톡 내부 브라우저가 아닌 Chrome 직접 실행",false);
-  }
+    return {width,height};
 }
 
 function drawGuide(){
-  if(frozen || video.paused || video.ended) return;
+    if(isFreezeSnapshot || !cameraStream || video.readyState < 2) return;
 
-  const w=video.videoWidth || 640;
-  const h=video.videoHeight || 480;
+    const {width,height} = setCanvasSize();
+    ctx.clearRect(0,0,width,height);
 
-  if(canvas.width!==w || canvas.height!==h){
-    canvas.width=w;
-    canvas.height=h;
-  }
+    const box = getGuideBox(width,height);
 
-  ctx.clearRect(0,0,w,h);
-  ctx.strokeStyle="rgba(0,230,118,.85)";
-  ctx.lineWidth=Math.max(3,w/320);
-  ctx.strokeRect(w*.15,h*.15,w*.70,h*.70);
-
-  requestAnimationFrame(drawGuide);
-}
-
-function capture(){
-  if(!cameraStream || !video.videoWidth){
-    alert("먼저 카메라를 켜주세요.");
-    return;
-  }
-
-  frozen=true;
-  video.pause();
-  captureBtn.classList.add("hidden");
-
-  const w=video.videoWidth;
-  const h=video.videoHeight;
-  canvas.width=w;
-  canvas.height=h;
-
-  ctx.drawImage(video,0,0,w,h);
-
-  // 현재 버전은 기존 코드의 구리색 픽셀 군집 방식과 호환되는
-  // 간단한 후보 검출을 사용한다.
-  const img=ctx.getImageData(0,0,w,h);
-  const data=img.data;
-
-  const x0=Math.floor(w*.15), y0=Math.floor(h*.15);
-  const x1=Math.floor(w*.85), y1=Math.floor(h*.85);
-
-  const mask=new Uint8Array(w*h);
-
-  for(let y=y0;y<y1;y+=2){
-    for(let x=x0;x<x1;x+=2){
-      const i=(y*w+x)*4;
-      const r=data[i], g=data[i+1], b=data[i+2];
-
-      if(r>110 && g>65 && b<125 && r>g*1.06 && g>b*1.08){
-        mask[y*w+x]=1;
-      }
-    }
-  }
-
-  // 주변 후보를 중심점으로 모으는 간단한 grid clustering
-  const gridSize=Math.max(12,Math.floor(Math.min(w,h)*.035));
-  const cells=new Map();
-
-  for(let y=y0;y<y1;y+=2){
-    for(let x=x0;x<x1;x+=2){
-      if(!mask[y*w+x]) continue;
-      const gx=Math.floor(x/gridSize);
-      const gy=Math.floor(y/gridSize);
-      const key=gx+","+gy;
-
-      if(!cells.has(key)) cells.set(key,{x:0,y:0,n:0});
-      const c=cells.get(key);
-      c.x+=x;c.y+=y;c.n++;
-    }
-  }
-
-  const points=[];
-  for(const c of cells.values()){
-    if(c.n>=2) points.push({x:c.x/c.n,y:c.y/c.n});
-  }
-
-  // 너무 가까운 중심점 병합
-  const merged=[];
-  const minDistance=Math.max(16,Math.min(w,h)*.035);
-
-  for(const p of points){
-    let found=null;
-    for(const q of merged){
-      if(Math.hypot(p.x-q.x,p.y-q.y)<minDistance){
-        found=q;break;
-      }
-    }
-    if(found){
-      found.x=(found.x+p.x)/2;
-      found.y=(found.y+p.y)/2;
-    }else{
-      merged.push({x:p.x,y:p.y});
-    }
-  }
-
-  // 결과 표시
-  ctx.drawImage(video,0,0,w,h);
-  ctx.strokeStyle="rgba(0,230,118,.85)";
-  ctx.lineWidth=3;
-  ctx.strokeRect(x0,y0,x1-x0,y1-y0);
-
-  merged.forEach((p,i)=>{
-    ctx.beginPath();
-    ctx.arc(p.x,p.y,Math.max(12,Math.min(w,h)*.018),0,Math.PI*2);
+    // 외곽 상자
     ctx.strokeStyle="#00e676";
-    ctx.lineWidth=3;
-    ctx.stroke();
+    ctx.lineWidth=Math.max(3,width/160);
+    ctx.strokeRect(box.x,box.y,box.w,box.h);
 
-    ctx.fillStyle="#ff1744";
-    ctx.beginPath();
-    ctx.arc(p.x,p.y,3,0,Math.PI*2);
-    ctx.fill();
+    // 5열 × 10행 격자
+    ctx.strokeStyle="rgba(0,230,118,.35)";
+    ctx.lineWidth=1;
 
-    ctx.fillStyle="#00e676";
-    ctx.font="bold "+Math.max(14,w/45)+"px sans-serif";
-    ctx.fillText(String(i+1),p.x+8,p.y-8);
-  });
+    const colW=box.w/5;
+    const rowH=box.h/10;
 
-  countBox.textContent=merged.length;
-  resultBox.style.display="block";
-  resetBtn.style.display="block";
+    for(let c=1;c<5;c++){
+        const x=box.x+c*colW;
+        ctx.beginPath();
+        ctx.moveTo(x,box.y);
+        ctx.lineTo(x,box.y+box.h);
+        ctx.stroke();
+    }
 
-  status("🎉 촬영 분석 완료\n검출 후보: "+merged.length+"발\n초록색 원이 실제 탄약 위치와 일치하는지 확인하세요.",true);
+    for(let r=1;r<10;r++){
+        const y=box.y+r*rowH;
+        ctx.beginPath();
+        ctx.moveTo(box.x,y);
+        ctx.lineTo(box.x+box.w,y);
+        ctx.stroke();
+    }
+
+    animationId=requestAnimationFrame(drawGuide);
 }
 
-function resetCamera(){
-  frozen=false;
-  resultBox.style.display="none";
-  resetBtn.style.display="none";
-  captureBtn.classList.remove("hidden");
+function getGuideBox(width,height){
+    // 원본 코드와 동일하게 화면 중앙 60% × 80% 사용
+    return {
+        x:width*0.20,
+        y:height*0.10,
+        w:width*0.60,
+        h:height*0.80
+    };
+}
 
-  if(cameraStream){
+async function activateDeviceLens(){
+    if(!isCameraAvailable()){
+        printLog(
+            "❌ 이 브라우저에서는 카메라 기능을 사용할 수 없습니다. Chrome에서 HTTPS 주소로 접속해 주세요.",
+            "#ffebee","#c62828"
+        );
+        return;
+    }
+
+    // 스마트폰 Chrome의 getUserMedia는 보안 컨텍스트가 필요함
+    if(!window.isSecureContext){
+        printLog(
+            "❌ 카메라 사용을 위해 HTTPS 주소가 필요합니다. 네이버 앱이 아니라 Chrome에서 HTTPS 주소로 열어주세요.",
+            "#ffebee","#c62828"
+        );
+        return;
+    }
+
+    startBtn.disabled=true;
+    printLog("🚀 카메라 권한을 요청하는 중입니다...");
+
+    // 기존 스트림이 있으면 먼저 종료
+    stopCamera();
+
+    const constraints={
+        audio:false,
+        video:{
+            facingMode:{ideal:"environment"},
+            width:{ideal:1280},
+            height:{ideal:720}
+        }
+    };
+
+    try{
+        cameraStream=await navigator.mediaDevices.getUserMedia(constraints);
+
+        video.srcObject=cameraStream;
+        video.muted=true;
+        video.playsInline=true;
+        video.setAttribute("playsinline","");
+        video.setAttribute("webkit-playsinline","");
+
+        await new Promise((resolve)=>{
+            if(video.readyState>=1 && video.videoWidth>0){
+                resolve();
+            }else{
+                video.addEventListener("loadedmetadata",resolve,{once:true});
+            }
+        });
+
+        await video.play();
+
+        isFreezeSnapshot=false;
+        captureBtn.disabled=false;
+        startBtn.style.display="none";
+
+        printLog(
+            "🎯 초록색 5×10 영역 안에 50발 탄약 상자 전체가 들어오도록 위에서 수직으로 맞춘 후 촬영하세요.",
+            "#e8f5e9","#2e7d32"
+        );
+
+        cancelAnimationFrame(animationId);
+        drawGuide();
+
+    }catch(err){
+        cameraStream=null;
+        startBtn.disabled=false;
+
+        let msg="❌ 카메라를 열 수 없습니다.";
+
+        if(err && err.name==="NotAllowedError"){
+            msg="❌ 카메라 권한이 거부되었습니다. Chrome 사이트 설정에서 카메라 권한을 허용해 주세요.";
+        }else if(err && err.name==="NotFoundError"){
+            msg="❌ 사용할 수 있는 카메라를 찾지 못했습니다.";
+        }else if(err && err.name==="NotReadableError"){
+            msg="❌ 다른 앱이 카메라를 사용 중일 수 있습니다. 카메라를 사용하는 앱을 닫아주세요.";
+        }else if(err && err.name==="SecurityError"){
+            msg="❌ 브라우저 보안 설정 때문에 카메라를 사용할 수 없습니다. HTTPS Chrome 접속을 확인하세요.";
+        }
+
+        printLog(msg+" ("+(err?.name || "unknown")+")","#ffebee","#c62828");
+    }
+}
+
+function processGridTrayCount(){
+    if(!cameraStream || !video.srcObject || video.readyState<2 || video.videoWidth===0){
+        printLog("❌ 먼저 스마트폰 카메라를 켜주세요.","#ffebee","#c62828");
+        return;
+    }
+
+    if(isFreezeSnapshot) return;
+
+    isFreezeSnapshot=true;
+    captureBtn.disabled=true;
+    cancelAnimationFrame(animationId);
+
+    if(navigator.vibrate) navigator.vibrate(60);
+
+    printLog("⚙️ 촬영된 화면에서 5×10 = 50칸을 분석하는 중입니다...");
+
+    // pause하기 전에 현재 영상을 canvas에 복사
+    const {width,height}=setCanvasSize();
+    ctx.drawImage(video,0,0,width,height);
+
+    // 분석용 원본 이미지를 별도 캔버스에 복사하지 않아도
+    // 현재 canvas의 ImageData를 바로 사용할 수 있음
+    const frame=ctx.getImageData(0,0,width,height);
+
+    const box=getGuideBox(width,height);
+    const cols=5;
+    const rows=10;
+    const colW=box.w/cols;
+    const rowH=box.h/rows;
+
+    let bulletCount=0;
+    let emptyCount=0;
+
+    // 결과 표시용 캔버스를 깨끗하게 만들고 원본 사진을 다시 그림
+    ctx.clearRect(0,0,width,height);
+    ctx.drawImage(video,0,0,width,height);
+
+    for(let r=0;r<rows;r++){
+        for(let c=0;c<cols;c++){
+            const startX=Math.max(0,Math.floor(box.x+c*colW));
+            const startY=Math.max(0,Math.floor(box.y+r*rowH));
+            const endX=Math.min(width,Math.floor(box.x+(c+1)*colW));
+            const endY=Math.min(height,Math.floor(box.y+(r+1)*rowH));
+
+            // 테두리/격자에 영향을 덜 받도록 칸 가장자리를 18%씩 제외
+            const marginX=Math.floor((endX-startX)*0.18);
+            const marginY=Math.floor((endY-startY)*0.18);
+
+            const x1=startX+marginX;
+            const x2=endX-marginX;
+            const y1=startY+marginY;
+            const y2=endY-marginY;
+
+            let copper=0;
+            let samples=0;
+
+            // 너무 작은 영역은 보호
+            if(x2<=x1 || y2<=y1) continue;
+
+            for(let y=y1;y<y2;y+=2){
+                for(let x=x1;x<x2;x+=2){
+                    const idx=(y*width+x)*4;
+                    const red=frame.data[idx];
+                    const green=frame.data[idx+1];
+                    const blue=frame.data[idx+2];
+
+                    /*
+                     * 원래 코드의 구리색 조건을 유지하되
+                     * 너무 어두운/노이즈성 픽셀의 영향을 줄임.
+                     */
+                    const warmCopper =
+                        red>125 &&
+                        green>75 &&
+                        blue<105 &&
+                        red>green*1.08 &&
+                        green>blue*1.15;
+
+                    if(warmCopper) copper++;
+                    samples++;
+                }
+            }
+
+            const ratio=samples ? copper/samples : 0;
+            const centerX=startX+(endX-startX)/2;
+            const centerY=startY+(endY-startY)/2;
+
+            // 원래 기준 5%를 유지
+            const occupied=ratio>=0.05;
+
+            if(occupied){
+                bulletCount++;
+
+                ctx.beginPath();
+                ctx.arc(
+                    centerX,
+                    centerY,
+                    Math.min(endX-startX,endY-startY)*0.34,
+                    0,Math.PI*2
+                );
+                ctx.strokeStyle="#00e676";
+                ctx.lineWidth=4;
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(centerX,centerY,4,0,Math.PI*2);
+                ctx.fillStyle="#ff1744";
+                ctx.fill();
+            }else{
+                emptyCount++;
+
+                ctx.strokeStyle="#ff1744";
+                ctx.lineWidth=3;
+
+                ctx.beginPath();
+                ctx.moveTo(centerX-9,centerY-9);
+                ctx.lineTo(centerX+9,centerY+9);
+                ctx.moveTo(centerX+9,centerY-9);
+                ctx.lineTo(centerX-9,centerY+9);
+                ctx.stroke();
+            }
+        }
+    }
+
+    // 최종 외곽선
+    ctx.strokeStyle="#00e676";
+    ctx.lineWidth=4;
+    ctx.strokeRect(box.x,box.y,box.w,box.h);
+
+    // 결과
+    countEl.textContent=bulletCount;
+    emptyCountEl.textContent=emptyCount;
+    resultBox.style.display="block";
+    resetBtn.style.display="block";
+
+    printLog(
+        "🎉 분석 완료: "+bulletCount+"발 / 빈 칸 "+emptyCount+"칸",
+        "#e8f5e9","#2e7d32"
+    );
+
+    // 화면은 마지막 촬영 프레임에서 정지된 상태로 유지
+    video.pause();
+}
+
+function unfreezeAndResetCamera(){
+    isFreezeSnapshot=false;
+    resultBox.style.display="none";
+    resetBtn.style.display="none";
+    captureBtn.disabled=false;
+
+    if(!cameraStream){
+        printLog("카메라가 꺼져 있습니다. 카메라 가동 버튼을 눌러주세요.");
+        startBtn.style.display="block";
+        return;
+    }
+
     video.play().then(()=>{
-      status("🎯 다시 촬영할 준비가 되었습니다.",true);
-      requestAnimationFrame(drawGuide);
+        printLog(
+            "🎯 초록색 5×10 영역 안에 50발 탄약 상자 전체가 들어오도록 맞춘 후 촬영하세요.",
+            "#e8f5e9","#2e7d32"
+        );
+        cancelAnimationFrame(animationId);
+        drawGuide();
+    }).catch(()=>{
+        printLog("❌ 카메라 화면을 다시 재생하지 못했습니다.","#ffebee","#c62828");
     });
-  }
 }
 
-startBtn.addEventListener("click",startCamera);
-captureBtn.addEventListener("click",capture);
-resetBtn.addEventListener("click",resetCamera);
+// 버튼 이벤트
+startBtn.addEventListener("click",activateDeviceLens);
+captureBtn.addEventListener("click",processGridTrayCount);
+resetBtn.addEventListener("click",unfreezeAndResetCamera);
 
-window.addEventListener("pagehide",()=>{
-  if(cameraStream){
-    cameraStream.getTracks().forEach(t=>t.stop());
-    cameraStream=null;
-  }
+// 카메라가 외부에서 종료된 경우 처리
+document.addEventListener("visibilitychange",()=>{
+    if(document.hidden) return;
+
+    if(cameraStream && !isFreezeSnapshot && video.paused){
+        video.play().catch(()=>{});
+    }
 });
+
+// 페이지가 닫힐 때 카메라 종료
+window.addEventListener("pagehide",()=>{
+    cancelAnimationFrame(animationId);
+    stopCamera();
+});
+
+// 초기 상태
+printLog("카메라 버튼을 누르면 후면 카메라를 실행합니다.");
 </script>
+
 </body>
 </html>

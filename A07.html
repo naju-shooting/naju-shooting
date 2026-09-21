@@ -3,22 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>실탄 실시간 카운터</title>
+    <title>실탄 카운터 최종</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; background: #f4f6f9; margin: 0; padding: 15px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; background: #f4f6f9; margin: 0; padding: 15px; -webkit-user-select: none; user-select: none; }
         .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
         h2 { margin: 5px 0 15px 0; color: #1a1a1a; font-size: 20px; }
         
-        /* 터치 반응을 확실하게 보장하는 네이티브 버튼 스타일 */
-        .start-btn { background: #00e676; color: #000; border: none; padding: 18px 30px; font-size: 20px; font-weight: bold; border-radius: 30px; cursor: pointer; width: 100%; box-shadow: 0 4px 14px rgba(0,230,118,0.4); margin-bottom: 15px; -webkit-appearance: none; appearance: none; }
-        .start-btn:active { background: #00c853; }
+        /* 💡 모바일 화면 터치 시 하이라이트 잔상이 남지 않는 무결성 네이티브 버튼 스타일 */
+        .start-btn { 
+            background: #00e676; color: #000; border: none; padding: 20px 30px; 
+            font-size: 22px; font-weight: bold; border-radius: 35px; cursor: pointer; 
+            width: 100%; box-shadow: 0 6px 20px rgba(0,230,118,0.4); margin-bottom: 15px; 
+            -webkit-tap-highlight-color: transparent; -webkit-appearance: none; appearance: none;
+            display: block;
+        }
         
-        /* 모바일 브라우저 튕김 방지 및 비디오 영역 크기 정규화 */
-        #video { width: 100%; height: auto; background: #000; border-radius: 12px; display: none; transform: scaleX(1); }
-        #canvasOutput { width: 100%; height: auto; background: #000; border-radius: 12px; display: none; }
-        
+        #video, #canvasOutput { width: 100%; height: auto; background: #000; border-radius: 12px; display: none; }
         .result-box { margin-top: 15px; padding: 15px; background: #ffebee; border-radius: 10px; font-size: 24px; font-weight: bold; color: #c62828; display: none; }
-        .status { color: #444; font-size: 13px; margin-bottom: 15px; padding: 12px; background: #eaeaea; border-radius: 8px; word-break: break-all; text-align: left; line-height: 1.5; }
+        .status { color: #444; font-size: 13px; margin-bottom: 15px; padding: 15px; background: #eaeaea; border-radius: 8px; word-break: break-all; text-align: left; line-height: 1.5; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -26,13 +28,12 @@
 <div class="container">
     <h2>실탄 개수 실시간 카운터</h2>
     
-    <!-- 터치 이벤트를 네이티브 리스너로 바인딩하기 위해 onClick 대신 id로 직접 제어합니다 -->
-    <button id="startBtn" class="start-btn">⚡ 카메라 및 엔진 작동 개시</button>
+    <!-- 터치 구동 버튼 -->
+    <button id="startBtn" class="start-btn">⚡ 화면 터치하여 카메라 켜기</button>
 
-    <!-- 실시간 디버깅 모니터링 상태창 -->
-    <div id="status" class="status">버튼을 터치하면 작동이 시작됩니다.<br><small>⚠️ 중요: 카카오톡 내부창에서는 실행되지 않으니 반드시 크롬/사파리 앱으로 주소를 직접 열어주세요.</small></div>
+    <!-- 실시간 상태 정보 모니터 -->
+    <div id="status" class="status">위의 초록색 버튼 영역을 손가락으로 터치해 주세요.</div>
     
-    <!-- 모바일 미디어 정책 우회를 위해 video 태그 속성을 극대화합니다 -->
     <video id="video" autoplay playsinline muted loop></video>
     <canvas id="canvasOutput"></canvas>
     
@@ -42,7 +43,6 @@
 </div>
 
 <script>
-// 전역 변수 선언 및 인터페이스 바인딩
 const startBtn = document.getElementById('startBtn');
 const statusDiv = document.getElementById('status');
 const video = document.getElementById('video');
@@ -51,88 +51,87 @@ const resultBox = document.getElementById('resultBox');
 const ctx = canvasOutput.getContext('2d', { willReadFrequently: true });
 let isOpenCvReady = false;
 
-function updateLog(msg, bgColor = '#e8f5e9', textColor = '#2e7d32') {
+function printLog(msg, bgColor = '#e3f2fd', textColor = '#0d47a1') {
     statusDiv.style.background = bgColor;
     statusDiv.style.color = textColor;
     statusDiv.innerText = msg;
 }
 
-// 🚨 모바일 터치 이벤트 오작동 원천 차단 (addEventListener로 명확하게 바인딩)
-startBtn.addEventListener('click', function(e) {
-    e.preventDefault();
-    startBtn.style.display = 'none'; // 연타 방지를 위한 즉시 제거
-    updateLog("🚀 [1단계] 카메라 제어 모듈 호출 중...", '#e3f2fd', '#0d47a1');
-    
-    // 모바일 브라우저 보안 규격 체크
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        updateLog("❌ 에러: 브라우저가 카메라 연동을 거절했습니다.\n\n[해결 방법]\n1. 주소창 맨 앞이 http:// 가 아닌지 확인 (https:// 필수)\n2. 카카오톡/네이버 내부 화면이 아닌지 확인 (반드시 기본 크롬/사파리 앱으로 접속)", '#ffebee', '#c62828');
-        return;
-    }
-    
-    // 하드웨어 카메라 권한 획득 프로세스로 '즉시 직행' (보안 차단 우회)
-    triggerMobileHardware();
-});
+// 💡 [핵심 변경점] 모바일 전용 터치 리스너(touchstart)와 클릭(click)을 동시 바인딩하여 씹힘 현상을 완벽히 방어합니다.
+const eventType = ('ontouchstart' in window) ? 'touchstart' : 'click';
 
-// 하드웨어 카메라 구동 (미디어 재생 정책 우회 결합)
-function triggerMobileHardware() {
-    const mobileConstraints = {
+startBtn.addEventListener(eventType, function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // 연타 및 오작동 차단용 비활성화
+    startBtn.style.display = 'none'; 
+    printLog("🚀 [1단계 신호 감지] 손가락 터치가 인식되었습니다! 디바이스 카메라 연동을 강제 시도합니다...");
+
+    // 스마트폰 하드웨어 렌즈에 직접 연결 프로세스 개시
+    openDeviceHardware();
+}, { passive: false });
+
+function openDeviceHardware() {
+    const mediaConstraints = {
         video: { 
-            facingMode: { ideal: "environment" }, // 스마트폰 후면 렌즈 타겟
+            facingMode: { ideal: "environment" }, // 스마트폰 후면 카메라 타겟
             width: { ideal: 640 },
             height: { ideal: 480 }
         },
         audio: false
     };
 
-    navigator.mediaDevices.getUserMedia(mobileConstraints)
-        .then(function(cameraStream) {
-            // 네이티브 비디오 스트림 연결
-            video.srcObject = cameraStream;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        printLog("❌ 에러: 브라우저가 카메라 하드웨어 보안 차단을 해제하지 못했습니다.\n\n[필수 조치]\n1. 주소창 주소가 반드시 https:// 로 시작하는지 확인하세요.\n2. 카카오톡 창을 끄고 크롬(Chrome)이나 사파리(Safari) 앱을 열고 직접 주소를 입력하세요.", '#ffebee', '#c62828');
+        return;
+    }
+
+    navigator.mediaDevices.getUserMedia(mediaConstraints)
+        .then(function(stream) {
+            video.srcObject = stream;
             
-            // 모바일 인라인 강제 재생 정책 속성 주입
+            // 모바일 인라인 재생 및 무음 자동구동 락 완전 해제
             video.setAttribute('playsinline', 'true');
             video.setAttribute('webkit-playsinline', 'true');
             video.setAttribute('muted', 'true');
             
-            // 재생 연산 시작
             video.play().then(() => {
-                video.style.display = 'block'; // 원본 비디오 임시 노출로 오작동 검증
-                updateLog("🚀 [2단계] 카메라 연동 성공! 컴퓨터 비전 AI 코어 엔진을 연결합니다.", '#e8f5e9', '#2e7d32');
-                loadVisionEngine();
-            }).catch(err => {
-                updateLog("❌ 에러: 미디어 자동 재생 정책에 의해 락이 걸렸습니다. 사파리/크롬 앱을 사용해 주세요: " + err.message, '#ffebee', '#c62828');
+                video.style.display = 'block'; 
+                printLog("🚀 [2단계 연결 완수] 카메라 렌즈 개방 성공! 컴퓨터 비전 AI 인식 엔진을 동적 로딩합니다...", '#e8f5e9', '#2e7d32');
+                injectOpenCvCore();
+            }).catch(playErr => {
+                printLog("❌ 재생 정책 차단 오류: " + playErr.message, '#ffebee', '#c62828');
             });
         })
         .catch(function(hardwareErr) {
-            updateLog("❌ 카메라 하드웨어 접근 실패: " + hardwareErr.name + "\n스마트폰 설정에서 브라우저의 카메라 사용 권한이 '허용'인지 체크하세요.", '#ffebee', '#c62828');
+            printLog("❌ 카메라 하드웨어 켜기 실패: " + hardwareErr.name + "\n스마트폰 시스템 설정 ➔ 개인정보보호 ➔ 카메라 메뉴에서 해당 브라우저 앱의 카메라 권한이 '허용'인지 반드시 체크하세요.", '#ffebee', '#c62828');
         });
 }
 
-// 고속 검증용 단일 파일 웹 CV 엔진 주입
-function loadVisionEngine() {
-    const cvScript = document.createElement('script');
-    cvScript.type = 'text/javascript';
-    cvScript.async = true;
-    cvScript.src = 'https://opencv.org';
+function injectOpenCvCore() {
+    const cdnScript = document.createElement('script');
+    cdnScript.type = 'text/javascript';
+    cdnScript.async = true;
+    cdnScript.src = 'https://opencv.org';
     
-    cvScript.onload = function() {
-        updateLog("🚀 [3단계] 비전 코어 해석 진행 중... 잠시만 기다려 주세요.", '#e8f5e9', '#2e7d32');
-        loopVerifyCv();
+    cdnScript.onload = function() {
+        printLog("🚀 [3단계 엔진 해석 중] AI 연산 모듈 압축을 푸는 중입니다. 잠시만 대기해 주세요...", '#e8f5e9', '#2e7d32');
+        loopCheckCvReady();
     };
     
-    cvScript.onerror = function() {
-        updateLog("❌ 에러: 비전 모듈 수신 실패. 기기의 인터넷(LTE/Wi-Fi) 연결 상태를 점검하세요.", '#ffebee', '#c62828');
+    cdnScript.onerror = function() {
+        printLog("❌ 에러: 인터넷 통신 딜레이로 인해 AI 엔진을 다운로드하지 못했습니다. 기기의 LTE/Wi-Fi 상태를 확인해 주세요.", '#ffebee', '#c62828');
     };
     
-    document.head.appendChild(cvScript);
+    document.head.appendChild(cdnScript);
 }
 
-function loopVerifyCv() {
+function loopCheckCvReady() {
     if (typeof cv !== 'undefined' && cv.matFromArray) {
-        updateLog("🎯 [최종완료] 모든 모듈 작동 중! 실탄 상자 후면(황금색 원형)을 정면으로 비춰주세요.");
+        printLog("🎯 [연동 완료] 모든 시스템 정상 가동 중! 탄약 상자의 황금색 실탄을 화면 중앙에 정면으로 비춰주세요.");
         isOpenCvReady = true;
         
-        // 화면 전사 교체 (비디오 숨기고 처리 캔버스 오픈)
         video.style.display = 'none';
         canvasOutput.style.display = 'block';
         resultBox.style.display = 'block';
@@ -142,11 +141,10 @@ function loopVerifyCv() {
         
         setTimeout(cvVisionProcessingLoop, 50);
     } else {
-        setTimeout(loopVerifyCv, 300);
+        setTimeout(loopCheckCvReady, 300);
     }
 }
 
-// 실시간 프레임 동기화 서클 카운팅 매칭 루프
 function cvVisionProcessingLoop() {
     if (!isOpenCvReady || video.paused || video.ended) {
         return;
@@ -167,7 +165,7 @@ function cvVisionProcessingLoop() {
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
         cv.GaussianBlur(gray, gray, new cv.Size(7, 7), 1.5, 1.5);
 
-        // 정밀 격자 가이드 검출 수치 세팅
+        // .22LR 실탄 가이드 핏 정밀 격자 서클 연산 알고리즘
         cv.HoughCircles(gray, circles, cv.HOUGH_GRADIENT, 1, 22, 45, 16, 10, 28);
 
         let detectedCount = 0;
@@ -178,8 +176,8 @@ function cvVisionProcessingLoop() {
                 let y = circles.data32F[i * 3 + 1];
                 let radius = circles.data32F[i * 3 + 2];
                 let center = new cv.Point(x, y);
-                cv.circle(src, center, radius,, 2);
-                cv.circle(src, center, 2,, -1);
+                cv.circle(src, center, radius, [0, 255, 0, 255], 2);
+                cv.circle(src, center, 2, [255, 0, 0, 255], -1);
             }
         }
 

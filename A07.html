@@ -1,269 +1,245 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>탄약 카메라 자동 계수기</title>
-<style>
-*{box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Noto Sans KR",sans-serif;text-align:center;background:#f4f6f9;margin:0;padding:15px;color:#1a1a1a}
-.container{max-width:650px;margin:0 auto;background:#fff;padding:18px;border-radius:16px;box-shadow:0 4px 16px rgba(0,0,0,.08)}
-h2{margin:4px 0 14px;font-size:21px}
-button{border:0;border-radius:12px;padding:14px 18px;font-size:17px;font-weight:700;cursor:pointer}
-#startBtn{background:#00e676;width:100%;font-size:21px;border-radius:32px;margin-bottom:10px}
-#stopBtn{background:#555;color:#fff;width:48%;display:none}
-#captureBtn{background:#1976d2;color:#fff;width:48%;display:none}
-.controls{display:flex;gap:8px;margin:10px 0}
-.status{color:#0d47a1;background:#e3f2fd;font-size:13px;margin-bottom:12px;padding:12px;border-radius:8px;text-align:left;line-height:1.5;font-weight:600;white-space:pre-line}
-.viewer{position:relative;background:#000;border-radius:12px;overflow:hidden;display:none}
-#video,#canvasOutput{width:100%;height:auto;display:block}
-#canvasOutput{position:absolute;left:0;top:0}
-.guide{position:absolute;left:8%;right:8%;top:8%;bottom:8%;border:2px dashed rgba(255,255,255,.75);border-radius:8px;pointer-events:none}
-.result{margin-top:12px;padding:14px;background:#ffebee;border-radius:10px;color:#c62828;font-size:28px;font-weight:800}
-.result small{display:block;font-size:12px;color:#666;margin-top:4px}
-.settings{margin-top:12px;text-align:left;background:#f5f5f5;border-radius:10px;padding:12px;font-size:13px}
-.settings label{display:block;margin:7px 0}
-.settings input{width:100%}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>.22LR 탄약 카운터 최종본</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; background: #f4f6f9; margin: 0; padding: 15px; -webkit-user-select: none; user-select: none; }
+        .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+        h2 { margin: 5px 0 15px 0; color: #1a1a1a; font-size: 20px; }
+        
+        .start-btn { 
+            background: #00e676; color: #000; border: none; padding: 20px 30px; 
+            font-size: 22px; font-weight: bold; border-radius: 35px; cursor: pointer; 
+            width: 100%; box-shadow: 0 6px 20px rgba(0,230,118,0.4); margin-bottom: 15px; 
+            -webkit-tap-highlight-color: transparent; -webkit-appearance: none; appearance: none;
+        }
+        
+        /* 💡 비디오와 캔버스를 겹쳐서 카메라가 하얗게 죽는 현상을 구조적으로 예방합니다 */
+        .video-box { position: relative; width: 100%; height: auto; background: #222; border-radius: 12px; overflow: hidden; min-height: 240px; }
+        #video { width: 100%; height: auto; display: block; }
+        #canvasOutput { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+        
+        .timer-badge { display: inline-block; padding: 6px 12px; background: #ff9100; color: white; border-radius: 20px; font-size: 14px; font-weight: bold; margin-bottom: 10px; display: none; }
+        .result-box { margin-top: 15px; padding: 15px; background: #e8f5e9; border-radius: 10px; font-size: 26px; font-weight: bold; color: #2e7d32; display: block; border: 2px solid #81c784; }
+        .reset-btn { background: #1e88e5; color: white; border: none; padding: 10px 20px; font-size: 15px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 10px; width: 100%; display: none; }
+        .status { color: #444; font-size: 13px; margin-bottom: 15px; padding: 15px; background: #eaeaea; border-radius: 8px; word-break: break-all; text-align: left; line-height: 1.5; font-weight: bold; }
+    </style>
 </head>
 <body>
+
 <div class="container">
-<h2>📷 탄약 개수 실시간 카운터</h2>
-
-<button id="startBtn">⚡ 카메라 켜고 계수 시작</button>
-
-<div class="controls">
-<button id="captureBtn">📸 현재 화면 계수</button>
-<button id="stopBtn">■ 카메라 끄기</button>
-</div>
-
-<div id="status" class="status">카메라 시작 버튼을 눌러 주세요.</div>
-
-<div id="viewer" class="viewer">
-    <video id="video" autoplay playsinline muted></video>
-    <canvas id="canvasOutput"></canvas>
-    <div class="guide"></div>
-</div>
-
-<div id="resultBox" class="result">
-검출된 탄약: <span id="count">0</span>발
-<small>현재 프레임에서 원형으로 검출된 탄약 수</small>
-</div>
-
-<div class="settings">
-    <b>계수 민감도</b>
-    <label>최소 원 크기: <span id="minVal">10</span> px
-        <input id="minRadius" type="range" min="5" max="25" value="10">
-    </label>
-    <label>최대 원 크기: <span id="maxVal">30</span> px
-        <input id="maxRadius" type="range" min="20" max="60" value="30">
-    </label>
-</div>
+    <h2>실탄 자동 스냅샷 카운터</h2>
+    
+    <button id="startBtn" class="start-btn">⚡ 화면 터치하여 카메라 켜기</button>
+    <div id="status" class="status">초록색 버튼을 터치하여 장치를 시작해 주세요.</div>
+    <div id="timerBadge" class="timer-badge">포커스 고정 중... 2초</div>
+    
+    <!-- 카메라 렌즈 출력 박스 -->
+    <div class="video-box">
+        <video id="video" autoplay playsinline muted loop></video>
+        <!-- 실시간 테두리 가이드라인만 얹어주는 투명 도화지 캔버스 -->
+        <canvas id="canvasOutput"></canvas>
+    </div>
+    
+    <div id="resultBox" class="result-box">
+        검출된 실탄: <span id="count">0</span>발
+        <button id="resetBtn" class="reset-btn" onclick="resetCapture()">🔄 다시 촬영하기</button>
+    </div>
 </div>
 
 <script>
-const startBtn=document.getElementById('startBtn');
-const stopBtn=document.getElementById('stopBtn');
-const captureBtn=document.getElementById('captureBtn');
-const statusDiv=document.getElementById('status');
-const video=document.getElementById('video');
-const canvas=document.getElementById('canvasOutput');
-const viewer=document.getElementById('viewer');
-const ctx=canvas.getContext('2d',{willReadFrequently:true});
-const countEl=document.getElementById('count');
-const minRadius=document.getElementById('minRadius');
-const maxRadius=document.getElementById('maxRadius');
-const minVal=document.getElementById('minVal');
-const maxVal=document.getElementById('maxVal');
+const startBtn = document.getElementById('startBtn');
+const statusDiv = document.getElementById('status');
+const timerBadge = document.getElementById('timerBadge');
+const video = document.getElementById('video');
+const canvasOutput = document.getElementById('canvasOutput');
+const resetBtn = document.getElementById('resetBtn');
+const ctx = canvasOutput.getContext('2d', { willReadFrequently: true });
 
-let stream=null;
-let cvReady=false;
-let running=false;
-let lastCount=0;
-let frameSkip=0;
+let isOpenCvReady = false;
+let isCaptured = false;
+let lastBulletCount = -1;
+let stableStartTime = 0;
+const STABLE_DURATION = 2000; // 2초 대기 고정 시간
 
-function log(msg,error=false){
-    statusDiv.textContent=msg;
-    statusDiv.style.background=error?'#ffebee':'#e3f2fd';
-    statusDiv.style.color=error?'#c62828':'#0d47a1';
+function printLog(msg, bgColor = '#e3f2fd', textColor = '#0d47a1') {
+    statusDiv.style.background = bgColor;
+    statusDiv.style.color = textColor;
+    statusDiv.innerText = msg;
 }
 
-minRadius.oninput=()=>minVal.textContent=minRadius.value;
-maxRadius.oninput=()=>maxVal.textContent=maxRadius.value;
+const eventType = ('ontouchstart' in window) ? 'touchstart' : 'click';
 
-startBtn.addEventListener('click', async ()=>{
-    startBtn.disabled=true;
-    log('① 카메라 권한을 요청하는 중입니다...');
-    try{
-        if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-            throw new Error('이 브라우저에서는 카메라 API를 사용할 수 없습니다. HTTPS 또는 localhost에서 실행하세요.');
+startBtn.addEventListener(eventType, function(e) {
+    e.preventDefault();
+    startBtn.style.display = 'none'; 
+    printLog("🚀 [1단계] 모바일 터치 확인! 후면 카메라 연동을 시작합니다.");
+    openDeviceHardware();
+}, { passive: false });
+
+function openDeviceHardware() {
+    const mediaConstraints = {
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false
+    };
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        printLog("❌ 에러: HTTPS 환경 혹은 크롬/사파리 앱에서 열어주셔야만 차단이 해제됩니다.", '#ffebee', '#c62828');
+        return;
+    }
+
+    navigator.mediaDevices.getUserMedia(mediaConstraints)
+        .then(function(stream) {
+            video.srcObject = stream;
+            video.setAttribute('playsinline', 'true');
+            video.setAttribute('webkit-playsinline', 'true');
+            video.setAttribute('muted', 'true');
+            
+            // 💡 영상을 먼저 무조건 화면에 띄웁니다 (하얀 화면 예방 핵심)
+            video.play().then(() => {
+                printLog("🚀 [2단계] 카메라 영상 투사 성공! 실시간 AI 엔진을 연결합니다.", '#e8f5e9', '#2e7d32');
+                injectOpenCvCore();
+            });
+        })
+        .catch(function(hardwareErr) {
+            printLog("❌ 카메라 개방 거부됨: 핸드폰 시스템 설정에서 브라우저의 카메라 권한을 허용해 주세요.", '#ffebee', '#c62828');
+        });
+}
+
+function injectOpenCvCore() {
+    const cdnScript = document.createElement('script');
+    cdnScript.type = 'text/javascript';
+    cdnScript.async = true;
+    cdnScript.src = 'https://opencv.org';
+    
+    cdnScript.onload = function() {
+        printLog("📸 [자동 촬영 준비 완료] 실탄 상자를 정면으로 비추고 흔들림을 멈춰주세요.", '#e8f5e9', '#2e7d32');
+        isOpenCvReady = true;
+        requestAnimationFrame(cvVisionProcessingLoop);
+    };
+    document.head.appendChild(cdnScript);
+}
+
+function cvVisionProcessingLoop() {
+    if (!isOpenCvReady || isCaptured || video.paused || video.ended) {
+        return;
+    }
+
+    try {
+        let vWidth = video.videoWidth || 640;
+        let vHeight = video.videoHeight || 480;
+        
+        if(canvasOutput.width !== vWidth || canvasOutput.height !== vHeight) {
+            canvasOutput.width = vWidth;
+            canvasOutput.height = vHeight;
         }
 
-        stream=await navigator.mediaDevices.getUserMedia({
-            audio:false,
-            video:{
-                facingMode:{ideal:'environment'},
-                width:{ideal:1280},
-                height:{ideal:720}
+        // 투명 도화지 리셋 및 준비
+        ctx.clearRect(0, 0, vWidth, vHeight);
+        
+        let src = new cv.Mat(vHeight, vWidth, cv.CV_8UC4);
+        ctx.drawImage(video, 0, 0, vWidth, vHeight);
+        let imgData = ctx.getImageData(0, 0, vWidth, vHeight);
+        src.data.set(imgData.data);
+
+        let gray = new cv.Mat();
+        let circles = new cv.Mat();
+
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        cv.GaussianBlur(gray, gray, new cv.Size(7, 7), 1.5, 1.5);
+
+        // 허프서클 매칭 수치 세팅
+        cv.HoughCircles(gray, circles, cv.HOUGH_GRADIENT, 1, 22, 45, 16, 10, 28);
+
+        // 실시간 카메라 화면 위에 얹을 가이드라인만 투명 캔버스에 드로잉
+        ctx.clearRect(0, 0, vWidth, vHeight);
+        let currentCount = 0;
+        if (circles.cols > 0) {
+            currentCount = circles.cols;
+            for (let i = 0; i < circles.cols; ++i) {
+                let x = circles.data32F[i * 3];
+                let y = circles.data32F[i * 3 + 1];
+                let radius = circles.data32F[i * 3 + 2];
+                
+                // 형광 연두색 동그라미 테두리 가이드라인 드로잉
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                ctx.strokeStyle = '#00e676';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                
+                // 중심 타겟팅 점 생성
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, 2 * Math.PI);
+                ctx.fillStyle = '#ff1744';
+                ctx.fill();
             }
-        });
+        }
 
-        video.srcObject=stream;
-        await video.play();
-        viewer.style.display='block';
-        stopBtn.style.display='block';
-        captureBtn.style.display='block';
+        // 실시간 발수 표기 반영
+        document.getElementById('count').innerText = currentCount;
 
-        log('② 후면 카메라 연결 완료.\n탄약을 화면 안쪽의 점선 영역에 넣고 최대한 위에서 촬영하세요.');
+        // 💡 2초 자동 고정 정지 알고리즘 구현
+        if (currentCount > 0 && currentCount === lastBulletCount) {
+            let currentTime = Date.now();
+            let elapsed = currentTime - stableStartTime;
+            
+            timerBadge.style.display = 'inline-block';
+            let remaining = ((STABLE_DURATION - elapsed) / 1000).toFixed(1);
+            timerBadge.innerText = `📸 초점 고정됨... ${remaining > 0 ? remaining : 0}초 후 캡처`;
 
-        await loadOpenCV();
-    }catch(e){
-        console.error(e);
-        log('❌ 카메라 실행 실패: '+e.message+
-            '\n\n• Chrome/Safari 사용\n• 주소가 https:// 또는 localhost인지 확인\n• 브라우저 카메라 권한 허용',true);
-        startBtn.disabled=false;
+            if (elapsed >= STABLE_DURATION) {
+                triggerSnapshot(currentCount);
+                src.delete(); gray.delete(); circles.delete();
+                return;
+            }
+        } else {
+            if (currentCount > 0) {
+                lastBulletCount = currentCount;
+                stableStartTime = Date.now();
+                timerBadge.style.display = 'none';
+            } else {
+                lastBulletCount = -1;
+                timerBadge.style.display = 'none';
+            }
+        }
+
+        src.delete();
+        gray.delete();
+        circles.delete();
+
+    } catch (err) {
+        console.error(err);
     }
-});
 
-stopBtn.addEventListener('click',()=>{
-    running=false;
-    if(stream) stream.getTracks().forEach(t=>t.stop());
-    stream=null;
-    video.srcObject=null;
-    viewer.style.display='none';
-    stopBtn.style.display='none';
-    captureBtn.style.display='none';
-    startBtn.disabled=false;
-    log('카메라가 꺼졌습니다.');
-});
+    requestAnimationFrame(cvVisionProcessingLoop);
+}
 
-captureBtn.addEventListener('click',()=>{
-    if(cvReady && video.videoWidth) processFrame(true);
-});
+// 최종 프리징 및 데이터 락 함수
+function triggerSnapshot(finalCount) {
+    isCaptured = true;
+    timerBadge.style.display = 'none';
+    video.pause(); // 카메라 화면 일시정지 고정
+    
+    if (navigator.vibrate) navigator.vibrate(100);
+    
+    printLog("🎉 촬영 및 분석 완료! 최종 탄약 개수가 잠금되었습니다.", '#e8f5e9', '#2e7d32');
+    document.getElementById('count').innerText = finalCount;
+    resetBtn.style.display = 'block'; // 재촬영 버튼 노출
+}
 
-function loadOpenCV(){
-    return new Promise((resolve,reject)=>{
-        if(window.cv && cv.Mat){cvReady=true;startLoop();resolve();return;}
-
-        log('③ 영상 처리 엔진(OpenCV.js)을 불러오는 중입니다...');
-        const s=document.createElement('script');
-        s.src='https://docs.opencv.org/4.x/opencv.js';
-        s.async=true;
-
-        s.onload=()=>{
-            const wait=()=>{
-                if(window.cv && cv.Mat){
-                    cvReady=true;
-                    log('④ 계수 엔진 준비 완료.\n탄약의 원형 림이 선명하게 보이도록 조명과 카메라 각도를 맞춰 주세요.');
-                    startLoop();
-                    resolve();
-                }else setTimeout(wait,100);
-            };
-            wait();
-        };
-        s.onerror=()=>reject(new Error('OpenCV.js 다운로드 실패. 인터넷 연결을 확인하세요.'));
-        document.head.appendChild(s);
+function resetCapture() {
+    isCaptured = false;
+    lastBulletCount = -1;
+    resetBtn.style.display = 'none';
+    video.play().then(() => {
+        printLog("📸 [자동 촬영 준비 완료] 실탄 상자를 정면으로 비추고 흔들림을 멈춰주세요.");
+        requestAnimationFrame(cvVisionProcessingLoop);
     });
 }
-
-function startLoop(){
-    running=true;
-    requestAnimationFrame(loop);
-}
-
-function loop(){
-    if(!running) return;
-    frameSkip++;
-    // 모바일 성능을 위해 2프레임 중 1프레임만 분석
-    if(frameSkip%2===0) processFrame(false);
-    requestAnimationFrame(loop);
-}
-
-function processFrame(force){
-    if(!cvReady || video.readyState<2 || !video.videoWidth) return;
-
-    const w=video.videoWidth;
-    const h=video.videoHeight;
-    canvas.width=w;
-    canvas.height=h;
-
-    ctx.drawImage(video,0,0,w,h);
-
-    let src=null, gray=null, blurred=null, circles=null;
-    try{
-        const image=ctx.getImageData(0,0,w,h);
-        src=new cv.Mat(h,w,cv.CV_8UC4);
-        src.data.set(image.data);
-
-        // 화면 중앙의 점선 영역만 계수하여 주변 물체의 오검출을 줄임
-        const x0=Math.floor(w*0.08);
-        const y0=Math.floor(h*0.08);
-        const rw=Math.floor(w*0.84);
-        const rh=Math.floor(h*0.84);
-
-        const roi=src.roi(new cv.Rect(x0,y0,rw,rh));
-        gray=new cv.Mat();
-        blurred=new cv.Mat();
-        circles=new cv.Mat();
-
-        cv.cvtColor(roi,gray,cv.COLOR_RGBA2GRAY);
-        cv.GaussianBlur(gray,blurred,new cv.Size(7,7),1.5,1.5);
-
-        const minR=parseInt(minRadius.value);
-        const maxR=Math.max(parseInt(maxRadius.value),minR+3);
-
-        // .22 계열처럼 원형 림이 보이는 탄약의 영상 계수용
-        cv.HoughCircles(
-            blurred,circles,cv.HOUGH_GRADIENT,
-            1.2,
-            Math.max(10,minR*1.4),
-            80,
-            18,
-            minR,
-            maxR
-        );
-
-        const candidates=[];
-        if(circles.cols>0){
-            for(let i=0;i<circles.cols;i++){
-                const x=circles.data32F[i*3];
-                const y=circles.data32F[i*3+1];
-                const r=circles.data32F[i*3+2];
-
-                // 서로 겹치는 원은 하나로 통합
-                let duplicate=false;
-                for(const c of candidates){
-                    const d=Math.hypot(x-c.x,y-c.y);
-                    if(d < Math.max(r,c.r)*0.65){
-                        duplicate=true;
-                        break;
-                    }
-                }
-                if(!duplicate) candidates.push({x,y,r});
-            }
-        }
-
-        // 원 검출 결과를 원본 화면 좌표로 변환해 표시
-        for(const c of candidates){
-            const p=new cv.Point(c.x+x0,c.y+y0);
-            cv.circle(src,p,Math.round(c.r),[0,255,0,255],2);
-            cv.circle(src,p,2,[255,0,0,255],-1);
-        }
-
-        lastCount=candidates.length;
-        countEl.textContent=lastCount;
-        cv.imshow('canvasOutput',src);
-
-        roi.delete();
-    }catch(e){
-        console.error('계수 오류',e);
-    }finally{
-        if(src)src.delete();
-        if(gray)gray.delete();
-        if(blurred)blurred.delete();
-        if(circles)circles.delete();
-    }
-}
 </script>
+
 </body>
 </html>

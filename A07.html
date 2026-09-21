@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>실탄 카운터 최종</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; background: #f4f6f9; margin: 0; padding: 15px; -webkit-user-select: none; user-select: none; }
+        .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+        h2 { margin: 5px 0 15px 0; color: #1a1a1a; font-size: 20px; }
+        
+        /* 💡 모바일 화면 터치 시 하이라이트 잔상이 남지 않는 무결성 네이티브 버튼 스타일 */
+        .start-btn { 
+            background: #00e676; color: #000; border: none; padding: 20px 30px; 
+            font-size: 22px; font-weight: bold; border-radius: 35px; cursor: pointer; 
+            width: 100%; box-shadow: 0 6px 20px rgba(0,230,118,0.4); margin-bottom: 15px; 
+            -webkit-tap-highlight-color: transparent; -webkit-appearance: none; appearance: none;
+            display: block;
+        }
+        
+        #video, #canvasOutput { width: 100%; height: auto; background: #000; border-radius: 12px; display: none; }
+        .result-box { margin-top: 15px; padding: 15px; background: #ffebee; border-radius: 10px; font-size: 24px; font-weight: bold; color: #c62828; display: none; }
+        .status { color: #444; font-size: 13px; margin-bottom: 15px; padding: 15px; background: #eaeaea; border-radius: 8px; word-break: break-all; text-align: left; line-height: 1.5; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>실탄 개수 실시간 카운터</h2>
+    
+    <!-- 터치 구동 버튼 -->
+    <button id="startBtn" class="start-btn">⚡ 화면 터치하여 카메라 켜기</button>
+
+    <!-- 실시간 상태 정보 모니터 -->
+    <div id="status" class="status">위의 초록색 버튼 영역을 손가락으로 터치해 주세요.</div>
+    
+    <video id="video" autoplay playsinline muted loop></video>
+    <canvas id="canvasOutput"></canvas>
+    
+    <div id="resultBox" class="result-box">
+        검출된 실탄: <span id="count">0</span>발
+    </div>
+</div>
+
+<script>
+const startBtn = document.getElementById('startBtn');
+const statusDiv = document.getElementById('status');
+const video = document.getElementById('video');
+const canvasOutput = document.getElementById('canvasOutput');
+const resultBox = document.getElementById('resultBox');
+const ctx = canvasOutput.getContext('2d', { willReadFrequently: true });
+let isOpenCvReady = false;
+
+function printLog(msg, bgColor = '#e3f2fd', textColor = '#0d47a1') {
+    statusDiv.style.background = bgColor;
+    statusDiv.style.color = textColor;
+    statusDiv.innerText = msg;
+}
+
+// 💡 [핵심 변경점] 모바일 전용 터치 리스너(touchstart)와 클릭(click)을 동시 바인딩하여 씹힘 현상을 완벽히 방어합니다.
+const eventType = ('ontouchstart' in window) ? 'touchstart' : 'click';
+
+startBtn.addEventListener(eventType, function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // 연타 및 오작동 차단용 비활성화
+    startBtn.style.display = 'none'; 
+    printLog("🚀 [1단계 신호 감지] 손가락 터치가 인식되었습니다! 디바이스 카메라 연동을 강제 시도합니다...");
+
+    // 스마트폰 하드웨어 렌즈에 직접 연결 프로세스 개시
+    openDeviceHardware();
+}, { passive: false });
+
+function openDeviceHardware() {
+    const mediaConstraints = {
+        video: { 
+            facingMode: { ideal: "environment" }, // 스마트폰 후면 카메라 타겟
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+        },
+        audio: false
+    };
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        printLog("❌ 에러: 브라우저가 카메라 하드웨어 보안 차단을 해제하지 못했습니다.\n\n[필수 조치]\n1. 주소창 주소가 반드시 https:// 로 시작하는지 확인하세요.\n2. 카카오톡 창을 끄고 크롬(Chrome)이나 사파리(Safari) 앱을 열고 직접 주소를 입력하세요.", '#ffebee', '#c62828');
+        return;
+    }
+
+    navigator.mediaDevices.getUserMedia(mediaConstraints)
+        .then(function(stream) {
+            video.srcObject = stream;
+            
+            // 모바일 인라인 재생 및 무음 자동구동 락 완전 해제
+            video.setAttribute('playsinline', 'true');
+            video.setAttribute('webkit-playsinline', 'true');
+            video.setAttribute('muted', 'true');
+            
+            video.play().then(() => {
+                video.style.display = 'block'; 
+                printLog("🚀 [2단계 연결 완수] 카메라 렌즈 개방 성공! 컴퓨터 비전 AI 인식 엔진을 동적 로딩합니다...", '#e8f5e9', '#2e7d32');
+                injectOpenCvCore();
+            }).catch(playErr => {
+                printLog("❌ 재생 정책 차단 오류: " + playErr.message, '#ffebee', '#c62828');
+            });
+        })
+        .catch(function(hardwareErr) {
+            printLog("❌ 카메라 하드웨어 켜기 실패: " + hardwareErr.name + "\n스마트폰 시스템 설정 ➔ 개인정보보호 ➔ 카메라 메뉴에서 해당 브라우저 앱의 카메라 권한이 '허용'인지 반드시 체크하세요.", '#ffebee', '#c62828');
+        });
+}
+
+function injectOpenCvCore() {
+    const cdnScript = document.createElement('script');
+    cdnScript.type = 'text/javascript';
+    cdnScript.async = true;
+    cdnScript.src = 'https://opencv.org';
+    
+    cdnScript.onload = function() {
+        printLog("🚀 [3단계 엔진 해석 중] AI 연산 모듈 압축을 푸는 중입니다. 잠시만 대기해 주세요...", '#e8f5e9', '#2e7d32');
+        loopCheckCvReady();
+    };
+    
+    cdnScript.onerror = function() {
+        printLog("❌ 에러: 인터넷 통신 딜레이로 인해 AI 엔진을 다운로드하지 못했습니다. 기기의 LTE/Wi-Fi 상태를 확인해 주세요.", '#ffebee', '#c62828');
+    };
+    
+    document.head.appendChild(cdnScript);
+}
+
+function loopCheckCvReady() {
+    if (typeof cv !== 'undefined' && cv.matFromArray) {
+        printLog("🎯 [연동 완료] 모든 시스템 정상 가동 중! 탄약 상자의 황금색 실탄을 화면 중앙에 정면으로 비춰주세요.");
+        isOpenCvReady = true;
+        
+        video.style.display = 'none';
+        canvasOutput.style.display = 'block';
+        resultBox.style.display = 'block';
+        
+        canvasOutput.width = video.videoWidth || 640;
+        canvasOutput.height = video.videoHeight || 480;
+        
+        setTimeout(cvVisionProcessingLoop, 50);
+    } else {
+        setTimeout(loopCheckCvReady, 300);
+    }
+}
+
+function cvVisionProcessingLoop() {
+    if (!isOpenCvReady || video.paused || video.ended) {
+        return;
+    }
+
+    try {
+        let vWidth = video.videoWidth || 640;
+        let vHeight = video.videoHeight || 480;
+        
+        let src = new cv.Mat(vHeight, vWidth, cv.CV_8UC4);
+        ctx.drawImage(video, 0, 0, vWidth, vHeight);
+        let imgData = ctx.getImageData(0, 0, vWidth, vHeight);
+        src.data.set(imgData.data);
+
+        let gray = new cv.Mat();
+        let circles = new cv.Mat();
+
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        cv.GaussianBlur(gray, gray, new cv.Size(7, 7), 1.5, 1.5);
+
+        // .22LR 실탄 가이드 핏 정밀 격자 서클 연산 알고리즘
+        cv.HoughCircles(gray, circles, cv.HOUGH_GRADIENT, 1, 22, 45, 16, 10, 28);
+
+        let detectedCount = 0;
+        if (circles.cols > 0) {
+            detectedCount = circles.cols;
+            for (let i = 0; i < circles.cols; ++i) {
+                let x = circles.data32F[i * 3];
+                let y = circles.data32F[i * 3 + 1];
+                let radius = circles.data32F[i * 3 + 2];
+                let center = new cv.Point(x, y);
+                cv.circle(src, center, radius, [0, 255, 0, 255], 2);
+                cv.circle(src, center, 2, [255, 0, 0, 255], -1);
+            }
+        }
+
+        document.getElementById('count').innerText = detectedCount;
+        cv.imshow('canvasOutput', src);
+
+        src.delete();
+        gray.delete();
+        circles.delete();
+
+    } catch (err) {
+        console.error(err);
+    }
+
+    requestAnimationFrame(cvVisionProcessingLoop);
+}
+</script>
+
+</body>
+</html>

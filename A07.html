@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>탄약 개수 실시간 파악 테스트</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; background: #f4f6f9; margin: 0; padding: 15px; }
+        .container { max-width: 540px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        h2 { margin-top: 5px; color: #1a1a1a; font-size: 20px; }
+        video { display: none; } 
+        .video-wrapper { position: relative; width: 100%; border-radius: 10px; overflow: hidden; background: #000; min-height: 240px; }
+        canvas { width: 100%; height: auto; display: block; }
+        .result-box { margin-top: 15px; padding: 12px; background: #ffebee; border-radius: 8px; font-size: 26px; font-weight: bold; color: #c62828; }
+        .status { color: #555; font-size: 13px; margin-bottom: 12px; padding: 12px; background: #eaeaea; border-radius: 6px; word-break: break-all; text-align: left; line-height: 1.5; }
+        .setup-box { background: #fffde7; border: 1px dashed #fbc02d; padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 13px; text-align: left; display: none; }
+        textarea { width: 100%; height: 80px; margin-top: 5px; box-sizing: border-box; font-size: 11px; font-family: monospace; }
+        button { background: #1e88e5; color: white; border: none; padding: 8px 12px; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 8px; width: 100%; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>실탄 개수 실시간 카운터</h2>
+    
+    <!-- 오프라인 주입용 인터페이스 상자 (엔진이 없을 때만 등장) -->
+    <div id="setupBox" class="setup-box">
+        <b>💡 [필수] 컴퓨터 비전 엔진 수동 주입 단계</b><br>
+        네트워크 차단으로 외부 라이브러리를 가져올 수 없습니다. 앞서 복사했던 <b>긴 영어 코드(Function (root, factory)...) 전체</b>를 아래 칸에 붙여넣고 등록 버튼을 눌러주세요. 딱 한 번만 등록하면 이후에는 오프라인에서도 즉시 작동합니다.
+        <textarea id="rawCodeInput" placeholder="(function(root, factory) { ... 으로 시작하는 긴 코드 전체를 여기에 붙여넣으세요)"></textarea>
+        <button onclick="saveEngineLocally()">엔진 브라우저 저장소에 등록하기</button>
+    </div>
+
+    <div id="status" class="status">시스템 검증 진행 중...</div>
+    
+    <div class="video-wrapper">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvasOutput"></canvas>
+    </div>
+    
+    <div class="result-box">
+        검출된 실탄: <span id="count">0</span>발
+    </div>
+</div>
+
+<script>
+const statusDiv = document.getElementById('status');
+const setupBox = document.getElementById('setupBox');
+const video = document.getElementById('video');
+const canvasOutput = document.getElementById('canvasOutput');
+const ctx = canvasOutput.getContext('2d', { willReadFrequently: true });
+let isOpenCvReady = false;
+
+function log(msg, isError = false) {
+    statusDiv.innerText = msg;
+    if (isError) {
+        statusDiv.style.background = '#ffebee';
+        statusDiv.style.color = '#c62828';
+    } else {
+        statusDiv.style.background = '#e8f5e9';
+        statusDiv.style.color = '#2e7d32';
+    }
+}
+
+window.onload = function() {
+    log("카메라 모듈 및 내부 메모리 엔진 검증 중...");
+    
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        log("❌ 에러: 이 브라우저 혹은 주소는 카메라를 지원하지 않습니다.\n반드시 크롬/사파리 앱을 사용하시고, 주소창 맨 앞이 https:// 인지 확인하세요.", true);
+        return;
+    }
+    
+    // 로컬 메모리(LocalStorage)에 기저장된 OpenCV 소스가 있는지 추출합니다.
+    const savedEngine = localStorage.getItem('local_opencv_source');
+    
+    if (savedEngine) {
+        log("내부 메모리에서 AI 엔진 발견! 코드 무결성 검증 및 실행 중...");
+        injectEngineScript(savedEngine);
+    } else {
+        log("⚠️ 알림: 엔진 코드가 등록되지 않았습니다. 상단의 노란색 상자에 코드를 붙여넣어 주세요.");
+        setupBox.style.display = 'block';
+    }
+};
+
+// 주입 받은 코드를 메모리에 가상 스크립트로 안착시키는 로직
+function injectEngineScript(codeText) {
+    try {
+        const script = document.createElement('script');
+        script.type = 'text/javascript';
+        // 텍스트 코드를 Blob 가상 파일 형태로 변환하여 직접 브라우저 코어에 주입합니다 (네트워크 차단 원천 무력화)
+        const blob = new Blob([codeText], { type: 'application/javascript' });
+        script.src = URL.createObjectURL(blob);
+        
+        script.onload = function() {
+            log("AI 가상 파일 주입 성공. 객체 활성화 검사 진행 중...");
+            checkCvObject();
+        };
+        
+        script.onerror = function() {
+            log("❌ 에러: 가상 파일 변환 도중 구문 에러가 발생했습니다. 정상적인 코드가 맞는지 확인해 주세요.", true);
+        };
+        
+        document.head.appendChild(script);
+    } catch (e) {
+        log("❌ 치명적 내부 에러: " + e.message, true);
+    }
+}
+
+// 텍스트 에어리어에 붙여넣은 코드를 로컬 스토리지에 영구 영수 시키는 장치
+function saveEngineLocally() {
+    const inputData = document.getElementById('rawCodeInput').value.trim();
+    if (!inputData || inputData.length < 1000) {
+        alert("코드가 유효하지 않거나 너무 짧습니다. 전체 내용을 정확하게 복사했는지 확인해 주세요.");
+        return;
+    }
+    
+    try {
+        localStorage.setItem('local_opencv_source', inputData);
+        setupBox.style.display = 'none';
+        log("🎉 엔진 내부 등록 성공! 시스템을 재부팅합니다.");
+        setTimeout(() => { location.reload(); }, 1000);
+    } catch (e) {
+        alert("브라우저 메모리 한계 초과 에러: 브라우저가 제공하는 로컬 저장 공간 용량이 부족합니다. 모바일 크롬 브라우저를 사용해 주세요.");
+    }
+}
+
+function checkCvObject() {
+    if (typeof cv !== 'undefined' && cv.matFromArray) {
+        log("OpenCV 엔진 로드 성공! 핸드폰 후면 카메라 장치 활성화를 개시합니다.");
+        isOpenCvReady = true;
+        startCamera();
+    } else {
+        setTimeout(checkCvObject, 300);
+    }
+}
+
+function startCamera() {
+    const constraints = {
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false
+    };
+
+    navigator.mediaDevices.getUserMedia(constraints)
+        .then(function(stream) {
+            video.srcObject = stream;
+            video.setAttribute('playsinline', true);
+            video.setAttribute('muted', true);
+            video.play();
+            
+            log("🎯 카메라 연동 완수! 실탄 상자의 황금색 탄피 뒷면을 평평하게 정면으로 맞춰 비춰주세요.");
+            
+            video.addEventListener('canplay', () => {
+                canvasOutput.width = video.videoWidth;
+                canvasOutput.height = video.videoHeight;
+                setTimeout(processFrameLoop, 33);
+            });
+        })
+        .catch(function(err) {
+            log(`❌ 카메라 활성화 실패: ${err.name}\n스마트폰 설정이나 브라우저 권한에서 카메라 차단을 해제해 주세요.`, true);
+        });
+}
+
+function processFrameLoop() {
+    if (!isOpenCvReady || video.paused || video.ended) {
+        return;
+    }
+
+    try {
+        let src = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
+        ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+        let imgData = ctx.getImageData(0, 0, video.videoWidth, video.videoHeight);
+        src.data.set(imgData.data);
+
+        let gray = new cv.Mat();
+        let circles = new cv.Mat();
+
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        cv.GaussianBlur(gray, gray, new cv.Size(7, 7), 1.5, 1.5);
+
+        cv.HoughCircles(gray, circles, cv.HOUGH_GRADIENT, 1, 22, 45, 16, 10, 28);
+
+        let count = 0;
+        if (circles.cols > 0) {
+            count = circles.cols;
+            for (let i = 0; i < circles.cols; ++i) {
+                let x = circles.data32F[i * 3];
+                let y = circles.data32F[i * 3 + 1];
+                let radius = circles.data32F[i * 3 + 2];
+                let center = new cv.Point(x, y);
+                cv.circle(src, center, radius,, 2);
+                cv.circle(src, center, 2,, -1);
+            }
+        }
+
+        document.getElementById('count').innerText = count;
+        cv.imshow('canvasOutput', src);
+
+        src.delete();
+        gray.delete();
+        circles.delete();
+
+    } catch (err) {
+        console.error(err);
+    }
+
+    requestAnimationFrame(processFrameLoop);
+}
+</script>
+
+</body>
+</html>

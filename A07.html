@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>탄약 개수 실시간 파악 테스트</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f0f0f0; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px #0000001a; }
+        video { display: none; } 
+        canvas { width: 100%; max-width: 500px; border-radius: 8px; background: #000; }
+        .result-box { margin-top: 15px; font-size: 24px; font-weight: bold; color: #d32f2f; }
+        .status { color: #666; font-size: 14px; margin-bottom: 10px; }
+    </style>
+    <!-- 💡 변경점: 인터넷 주소(CDN)를 통해 OpenCV를 직접 로드합니다. 파일 다운로드가 필요 없습니다. -->
+    <script async src="https://opencv.org" onload="onOpenCvReady();" type="text/javascript"></script>
+</head>
+<body>
+
+<div class="container">
+    <h2>실탄 개수 실시간 카운터</h2>
+    <div id="status" class="status">OpenCV 라이브러리를 온라인에서 로딩 중입니다...</div>
+    
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvasOutput"></canvas>
+    
+    <div class="result-box">
+        검출된 실탄: <span id="count">0</span>발
+    </div>
+</div>
+
+<script>
+let video = document.getElementById('video');
+let canvasOutput = document.getElementById('canvasOutput');
+let ctx = canvasOutput.getContext('2d', { willReadFrequently: true });
+let isOpenCvReady = false;
+
+function onOpenCvReady() {
+    document.getElementById('status').innerText = "OpenCV 로드 완료! 카메라를 연결합니다.";
+    isOpenCvReady = true;
+    startCamera();
+}
+
+function startCamera() {
+    const constraints = {
+        video: { 
+            facingMode: { exact: "environment" }, 
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+        },
+        audio: false
+    };
+
+    navigator.mediaDevices.getUserMedia(constraints)
+        .then(handleSuccess)
+        .catch(function(err) {
+            console.log("exact 후면 카메라 실패, ideal 모드로 재시도합니다.", err.name);
+            const fallbackConstraints = {
+                video: { facingMode: { ideal: "environment" } },
+                audio: false
+            };
+            return navigator.mediaDevices.getUserMedia(fallbackConstraints).then(handleSuccess);
+        })
+        .catch(function(finalErr) {
+            document.getElementById('status').innerText = "카메라 연결 실패: " + finalErr.name;
+            console.error(finalErr);
+        });
+}
+
+function handleSuccess(stream) {
+    video.srcObject = stream;
+    video.setAttribute('playsinline', true);
+    video.setAttribute('muted', true);
+    video.play();
+    
+    document.getElementById('status').innerText = "후面 카메라 작동 중 - 탄약상자를 비춰주세요.";
+    
+    video.addEventListener('canplay', () => {
+        canvasOutput.width = video.videoWidth;
+        canvasOutput.height = video.videoHeight;
+        setTimeout(processVideo, 30);
+    });
+}
+
+function processVideo() {
+    if (!isOpenCvReady || video.paused || video.ended) {
+        return;
+    }
+
+    try {
+        let src = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
+        ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+        let imgData = ctx.getImageData(0, 0, video.videoWidth, video.videoHeight);
+        src.data.set(imgData.data);
+
+        let gray = new cv.Mat();
+        let circles = new cv.Mat();
+
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        cv.GaussianBlur(gray, gray, new cv.Size(9, 9), 2, 2);
+
+        cv.HoughCircles(
+            gray, 
+            circles, 
+            cv.HOUGH_GRADIENT, 
+            1, 
+            25,    
+            50,    
+            18,    
+            8,     
+            25     
+        );
+
+        let count = 0;
+        if (circles.cols > 0) {
+            count = circles.cols;
+            for (let i = 0; i < circles.cols; ++i) {
+                let x = circles.data32F[i * 3];
+                let y = circles.data32F[i * 3 + 1];
+                let radius = circles.data32F[i * 3 + 2];
+                
+                let center = new cv.Point(x, y);
+                cv.circle(src, center, radius, [0, 255, 0, 255], 2);
+                cv.circle(src, center, 2, [255, 0, 0, 255], -1);
+            }
+        }
+
+        document.getElementById('count').innerText = count;
+        cv.imshow('canvasOutput', src);
+
+        src.delete();
+        gray.delete();
+        circles.delete();
+
+    } catch (err) {
+        console.error(err);
+    }
+
+    requestAnimationFrame(processVideo);
+}
+</script>
+
+</body>
+</html>

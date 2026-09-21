@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>탄약 개수 실시간 파악 테스트</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; background: #f4f6f9; margin: 0; padding: 15px; }
+        .container { max-width: 540px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        h2 { margin-top: 5px; color: #1a1a1a; font-size: 20px; }
+        video { display: none; } 
+        .video-wrapper { position: relative; width: 100%; border-radius: 10px; overflow: hidden; background: #000; min-height: 240px; }
+        canvas { width: 100%; height: auto; display: block; }
+        .result-box { margin-top: 15px; padding: 12px; background: #ffebee; border-radius: 8px; font-size: 26px; font-weight: bold; color: #c62828; }
+        .status { color: #555; font-size: 13px; margin-bottom: 12px; padding: 12px; background: #eaeaea; border-radius: 6px; word-break: break-all; text-align: left; line-height: 1.5; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>실탄 개수 실시간 카운터</h2>
+    <!-- 실시간 진행 상태와 오류를 스마트폰 화면에 바로 뿌려주는 모니터창입니다 -->
+    <div id="status" class="status">Step 1: 시스템 초기화 및 엔진 로딩 준비 중...</div>
+    
+    <div class="video-wrapper">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvasOutput"></canvas>
+    </div>
+    
+    <div class="result-box">
+        검출된 실탄: <span id="count">0</span>발
+    </div>
+</div>
+
+<script>
+const statusDiv = document.getElementById('status');
+const video = document.getElementById('video');
+const canvasOutput = document.getElementById('canvasOutput');
+const ctx = canvasOutput.getContext('2d', { willReadFrequently: true });
+let isOpenCvReady = false;
+
+function log(msg, isError = false) {
+    statusDiv.innerText = msg;
+    if (isError) {
+        statusDiv.style.background = '#ffebee';
+        statusDiv.style.color = '#c62828';
+    } else {
+        statusDiv.style.background = '#e8f5e9';
+        statusDiv.style.color = '#2e7d32';
+    }
+    console.log(msg);
+}
+
+// 1. 페이지가 열리면 하드웨어 카메라 주소(HTTPS) 환경부터 먼저 즉시 검증합니다.
+window.onload = function() {
+    log("Step 1: 카메라 브라우저 호환성 검증 중...");
+    
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        log("❌ 에러: 이 브라우저 혹은 주소는 카메라 기능을 지원하지 않습니다.\n\n주 원인:\n1. 주소가 https:// 로 시작하지 않음 (http://는 카메라 차단됨)\n2. 카카오톡/네이버 인앱 브라우저로 열었음 (반드시 크롬이나 사파리로 접속하세요)", true);
+        return;
+    }
+    
+    // 환경 검증을 통과하면 가장 가볍고 안정적인 공식 경량화 OpenCV 엔진 주소를 동적으로 주입합니다.
+    log("Step 2: 컴퓨터 비전 AI 엔진 다운로드 중... (약 3~5초 소요)");
+    const script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.async = true;
+    // 신뢰성 높은 최적화 버전의 단일 CDN 주소를 사용해 깨짐 현상을 방지합니다.
+    script.src = 'https://opencv.org';
+    
+    script.onload = function() {
+        log("Step 3: AI 엔진 압축 해제 및 활성화 진행 중...");
+        checkCvObject();
+    };
+    
+    script.onerror = function() {
+        log("❌ 에러: 외부 AI 라이브러리 엔진을 다운로드하는 데 실패했습니다. 네트워크 연결(LTE/Wi-Fi) 상태를 확인 후 새로고침 해주세요.", true);
+    };
+    
+    document.head.appendChild(script);
+};
+
+// cv 엔진 객체가 브라우저 메모리에 완벽히 안착했는지 체크
+function checkCvObject() {
+    if (typeof cv !== 'undefined' && cv.matFromArray) {
+        log("Step 4: AI 엔진 활성화 완료! 스마트폰 후면 카메라 하드웨어에 연결합니다.");
+        isOpenCvReady = true;
+        startCamera();
+    } else {
+        setTimeout(checkCvObject, 300);
+    }
+}
+
+// 2. 모바일 카메라 하드웨어 구동 (에러 추적 기능 보강)
+function startCamera() {
+    const constraints = {
+        video: { 
+            facingMode: { ideal: "environment" }, // 후면 카메라 우선 순위 적용
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+        },
+        audio: false
+    };
+
+    navigator.mediaDevices.getUserMedia(constraints)
+        .then(function(stream) {
+            video.srcObject = stream;
+            video.setAttribute('playsinline', true);
+            video.setAttribute('muted', true);
+            video.play();
+            
+            log("🎯 카메라 연동 성공! 실탄 상자의 뒷면(황금색 원형)이 수직으로 보이게 비춰주세요.");
+            
+            video.addEventListener('canplay', () => {
+                canvasOutput.width = video.videoWidth;
+                canvasOutput.height = video.videoHeight;
+                setTimeout(processFrameLoop, 33);
+            });
+        })
+        .catch(function(err) {
+            log(`❌ 카메라 하드웨어 연결 실패\n이유: ${err.name} (${err.message})\n\n[조치방법] 스마트폰 브라우저 상단 자물쇠 버튼을 눌러 카메라 권한을 '허용'으로 변경해 주세요.`, true);
+        });
+}
+
+// 3. 실시간 프레임 영상 분석 처리 알고리즘
+function processFrameLoop() {
+    if (!isOpenCvReady || video.paused || video.ended) {
+        return;
+    }
+
+    try {
+        let src = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
+        ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+        let imgData = ctx.getImageData(0, 0, video.videoWidth, video.videoHeight);
+        src.data.set(imgData.data);
+
+        let gray = new cv.Mat();
+        let circles = new cv.Mat();
+
+        // 흑백 필터 및 가우시안 마스크 통과
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        cv.GaussianBlur(gray, gray, new cv.Size(7, 7), 1.5, 1.5);
+
+        // .22LR 실탄 트레이 간격 맞춤 허프 서클 매칭 연산
+        cv.HoughCircles(
+            gray, circles, cv.HOUGH_GRADIENT, 1, 
+            22, // 원형 중심 간의 최소 이격 거리 제한
+            45, // Canny 에지 두께 민감도
+            16, // 원형 판별 누적 임계값 (낮을수록 민감하게 반응)
+            10, // 최소 반지름 규격
+            28  // 최대 반지름 규격
+        );
+
+        let count = 0;
+        if (circles.cols > 0) {
+            count = circles.cols;
+            for (let i = 0; i < circles.cols; ++i) {
+                let x = circles.data32F[i * 3];
+                let y = circles.data32F[i * 3 + 1];
+                let radius = circles.data32F[i * 3 + 2];
+                
+                let center = new cv.Point(x, y);
+                // 실탄 테두리에 선명한 연두색 원 마킹
+                cv.circle(src, center, radius, [0, 255, 0, 255], 2);
+                // 정중앙 타겟팅 붉은 점 생성
+                cv.circle(src, center, 2, [255, 0, 0, 255], -1);
+            }
+        }
+
+        document.getElementById('count').innerText = count;
+        cv.imshow('canvasOutput', src);
+
+        // 프레임 폭주로 인한 브라우저 튕김 방지 매 프레임 수동 가비지 컬렉션
+        src.delete();
+        gray.delete();
+        circles.delete();
+
+    } catch (err) {
+        // 내부 루프 에러 시 시스템 다운 방지
+        console.error(err);
+    }
+
+    requestAnimationFrame(processFrameLoop);
+}
+</script>
+
+</body>
+</html>
